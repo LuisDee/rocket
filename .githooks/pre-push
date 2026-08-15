@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+#
+# git feeds pre-push stdin exactly once. Capture it to a file so more than one
+# check can read it, and run the cheap local checks before anything that costs
+# a network call.
+#
+# Ordering rule: free and fails-fast first. A check that spends an API call
+# should never run for a push that a local check would have rejected anyway.
+set -euo pipefail
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+GUARDS="$REPO_ROOT/scripts"
+
+stdin_capture=$(mktemp -t pre-push-stdin.XXXXXX)
+trap 'rm -f "$stdin_capture"' EXIT
+cat > "$stdin_capture"
+
+# Fails closed: pure local git logic, no external dependency, no flake excuse.
+if [ -f "$GUARDS/check_task_trace.py" ]; then
+    python3 "$GUARDS/check_task_trace.py" < "$stdin_capture"
+fi
+
+# Nothing fires on `git commit` -- see docs/decisions.md 2026-08-15. These two
+# are here because they are the mistakes that cost a wasted Vercel deploy, and
+# both are local and deterministic, so they fail closed like the trace check.
+npm run --silent typecheck
+npm run --silent test
+
+# Add further pre-push checks below, cheapest first.
+#
+# If you add one that depends on a network call or an external binary, make it
+# FAIL OPEN (warn, do not block) -- a push must never hang or fail on infra
+# flake. Anything that fails closed must be local-only and deterministic.

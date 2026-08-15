@@ -3,6 +3,7 @@
 Personal training-planning system for Luis. Goal race: **Battersea Park Marathon, 24 Oct 2026** ("as fast as possible"). MCP-first: the primary interface is conversation with Claude, which reads/writes plan state through MCP tools. A thin PWA (saved to iOS home screen) renders the calendar and daily check-in. Architecture is deliberately simple: one web server, one datastore, MCP endpoint, PWA frontend. Do not gold-plate infrastructure.
 
 ## Read these before writing any code
+
 - `docs/specs/00-overview.md` — system concept and principles
 - `docs/specs/01-domain-model.md` — entities and state
 - `docs/specs/02-load-engine.md` — training stress, ATL/CTL/TSB, readiness
@@ -13,6 +14,7 @@ Personal training-planning system for Luis. Goal race: **Battersea Park Marathon
 - `docs/specs/07-wiring-todo.md` — external dependencies to wire, in order
 
 ## Non-negotiable invariants
+
 1. **Guardrails beat enthusiasm.** User requests that violate ramp-rate, recovery, or taper rules are negotiated, never silently executed. The planner may propose a compliant alternative.
 2. **Degrade gracefully.** Garmin sync is unofficial and will break without warning. Every feature must function on cached data + manual check-ins alone.
 3. **The plan is a rolling window.** Only ~7–10 days of concrete sessions exist at any time. Macro layer holds weekly load targets only. Replanning must be cheap.
@@ -20,6 +22,7 @@ Personal training-planning system for Luis. Goal race: **Battersea Park Marathon
 5. **Context tags matter.** Surface, elevation, and footwear materially change training stress for the same distance/pace. Never score on distance alone.
 
 ## Conventions
+
 - Specs in `docs/specs/` are the source of truth. If implementation must diverge, update the spec in the same MR.
 - Prefer boring, readable code over clever code. This is a single-user system.
 - All dates/times Europe/London.
