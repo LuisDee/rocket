@@ -51,4 +51,4 @@ Readiness factors or Garmin's own acute/chronic pair. Recorded in `docs/decision
 
 ## Commits
 
-(populated as work lands)
+- `cffd93b` feat(tools): harness that wires Garmin and Strava in
