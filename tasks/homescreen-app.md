@@ -61,4 +61,4 @@ so rather than implying live data.
 
 ## Commits
 
-(populated as work lands)
+- `866f7b6` feat(app): the block on the home screen
