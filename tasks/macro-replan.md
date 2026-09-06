@@ -54,3 +54,5 @@ the choice rather than re-derive it.
 - [x] Plan clock corrected to 48 days and `BLOCK_WEEKS` renamed
 
 ## Commits
+
+- `758a2dc` docs: re-derive the macro block from measured Garmin history
