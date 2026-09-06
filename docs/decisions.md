@@ -294,3 +294,46 @@ headers, and lasts 48-72+ hours with no recovery process.
 
 **Status:** ACTIVE. The probe result is PROVISIONAL pending Luis running it; the
 branch it selects should be recorded as a further entry.
+
+## 2026-08-18 -- guardrails ship before the load engine; two-component model deferred
+
+**Context:** `PLAN-2026-001` ordered the M1 stages as load engine (stress
+cascade, then rolling load state) followed by the planner and its guardrails.
+That ordering assumed guardrail enforcement needs load state. Re-reading
+`03-planner.md:22-28` against what each guardrail actually consumes shows it
+does not: the ramp cap compares weekly km against the previous week, the
+minimum rest-or-swim-only day and the taper protection read the schedule, and
+the quality gate reads reported soreness from the check-in. Three of four need
+distance and the schedule only; the fourth needs the check-in. None needs TSS,
+ATL, CTL, TSB or the two-component split. With 67 days to the race and the
+block already running, that ordering put the project's differentiator behind
+three stages of unvalidated modelling.
+
+**Decision:** the planner/guardrail stage and the replan/negotiation stage move
+ahead of the stress cascade and the load-state stage — stages now read 6
+planner, 7 replan, 8 stress cascade, 9 load state. The MVP is stated
+explicitly in the plan as: a persistent, phone-accessible training plan that
+auto-ingests Garmin activities and pushes back when Luis breaks his own rules.
+The two-component cardio/musculoskeletal load model is deferred, not deleted.
+
+**Alternatives rejected:** keeping the original order, which is defensible only
+if the guardrails need load state, and they do not. Deleting the two-component
+model outright — rejected because it is the spec's stated intent
+(`02-load-engine.md:9-13`) and the evidence that would justify or kill it does
+not exist yet. Shipping the guardrails without the ramp cap to avoid open
+question 3 — rejected because the ramp cap is the guardrail most likely to
+actually fire during a rebuild block.
+
+**Consequences:** the coach argues back several stages earlier, on manual
+logging alone, which is what spec invariant 2 always intended. Open question 3
+becomes more urgent — it now blocks Stage 6 rather than Stage 8. Readiness as a
+distinct signal from raw soreness is unavailable until Stage 9, so Loop B's
+recovery gate reads the check-in alone until then and upgrades in place when
+HRV and resting HR arrive. Garmin's own `get_training_readiness()` and
+`get_training_status()` cover the gap in the meantime at no cost. The named
+trigger for revisiting the deferral: once Stage 9 has run ~3 weeks against real
+data with Garmin's series stored alongside ours, the divergence between them is
+the evidence that says whether a second computed component earns its place.
+
+**Status:** ACTIVE. The deferral is PROVISIONAL pending that divergence
+evidence; it is a deferral with a trigger, not a silent scope cut.

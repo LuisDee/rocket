@@ -3,7 +3,7 @@
 **Spec**: `docs/specs/00-overview.md` … `07-wiring-todo.md` (the seeded spec pack — no `SPEC-YYYY-NNN` file exists; the pack is the source of truth and this plan consumes it rather than re-deriving it).
 **Status**: DRAFT — awaiting approval before any implementation.
 **Branch/worktree**: `.worktrees/m1-core-loop` on `feat/m1-core-loop`. Main stays on `main`.
-**Clock**: written 2026-08-16, Garmin sections revised 2026-08-18. Race is 2026-10-24, **67 days out**. Taper decisions — the highest-stakes calls of the block — start landing around 3 October, which is what makes the Stage 3b backfill urgent.
+**Clock**: written 2026-08-16, Garmin sections revised 2026-08-18. Race is 2026-10-24, **67 days out**. Two hard deadlines sit inside that: **~28 Sep**, load model warm and trusted before race-prep week 8, because taper decisions are the block's highest-stakes calls; and **4 Oct, Lincoln Half**, which locks goal marathon pace — the system must be able to ingest that result and re-derive MP from it by then. Together they are what make the Stage 3b backfill urgent.
 
 ---
 
@@ -17,17 +17,17 @@ Because rocket has no patterns of its own yet, "codebase patterns to follow" mea
 
 ### Skills and agents to leverage
 
-| Skill / agent                                             | When                                                                                         |
-| --------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `test-driven-development`                                 | Before every stage — RED first                                                               |
-| `systematic-debugging`                                    | On any test failure, before a fix attempt                                                    |
-| `code-reviewer`                                           | After every stage                                                                            |
-| `security-reviewer-fullstack`                             | After Stages 1, 6, 7 — **mandatory** (append-only guards, bearer auth, OAuth)                |
-| `typescript-pro`                                          | Stages 2, 5, 6 — branded types for the two load components, discriminated unions for results |
-| `database-migrations` / `postgres-pro`                    | Stage 1 — migration ordering, trigger semantics                                              |
-| `nextjs-developer`                                        | Stages 6, 7 — App Router route handlers, nested well-known paths                             |
-| `fewer-permission-prompts`                                | Not applicable                                                                               |
-| `verified-not-claimed` / `verification-before-completion` | Before any done-claim                                                                        |
+| Skill / agent                                             | When                                                                                      |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `test-driven-development`                                 | Before every stage — RED first                                                            |
+| `systematic-debugging`                                    | On any test failure, before a fix attempt                                                 |
+| `code-reviewer`                                           | After every stage                                                                         |
+| `security-reviewer-fullstack`                             | After Stages 1, 4, 5 — **mandatory** (append-only guards, bearer auth, OAuth)             |
+| `typescript-pro`                                          | Stages 2, 8 — branded types for the two load components, discriminated unions for results |
+| `database-migrations` / `postgres-pro`                    | Stage 1 — migration ordering, trigger semantics                                           |
+| `nextjs-developer`                                        | Stages 4, 5 — App Router route handlers, nested well-known paths                          |
+| `fewer-permission-prompts`                                | Not applicable                                                                            |
+| `verified-not-claimed` / `verification-before-completion` | Before any done-claim                                                                     |
 
 ### Key discovered facts (verified this session)
 
@@ -114,16 +114,42 @@ routr's `PLAN-2026-004` paranoid pass produced findings that transfer directly: 
 5. Every logged activity survives a deliberate `UPDATE` and `DELETE` attempt at the database level.
 6. Full suite green: unit + integration against a real Postgres + the MCP contract tests.
 
+### The MVP, and what is deliberately deferred
+
+**MVP: a persistent, phone-accessible training plan that auto-ingests Garmin activities and pushes back when Luis breaks his own rules.**
+
+That is Stages 0–7. Stages 8–9 are the load modelling, and they are an upgrade to a system already in daily use rather than a
+precondition for it — which is the reordering recorded in `docs/decisions.md` (2026-08-18).
+
+**Deferred hardest: the two-component cardio/musculoskeletal load model.** It is the weakest bet in the project, and naming
+that plainly is the point of this paragraph:
+
+- No published validation exists for a computed cardio/MSK split. The closest commercial precedent is Polar's Muscle Load in
+  kJ; the closest science is differential RPE, which validates a _perceptual_ split rather than a computed one.
+- Its coefficients — `w_ecc`, the surface factors, footwear novelty decay — are calibration knobs, not findings. No published
+  coefficient converts descent metres into muscle-damage load.
+- Calibrating them needs prediction-vs-outcome pairs that do not exist yet and cannot exist until the system has been in use
+  for weeks.
+- Its principal output, readiness, is still gated on open question 4 — the specs mandate two components and then define
+  readiness without one.
+- Garmin already provides a readiness score with five weighted factors and a real acute/chronic pair for free, via
+  `get_training_readiness()` and `get_training_status()`.
+
+Rocket's genuine differentiator is the conversation and the guardrails, not a second load number. **Trigger to revisit**: once
+Stage 9 has run for ~3 weeks against real data and Garmin's own numbers are stored alongside ours, the divergence between the
+two series is the evidence that says whether the second component earns its place. That is a decision with data behind it,
+which is the only honest way to make it.
+
 ### Open questions — resolved this session
 
-1. **M1 boundary** → **the phone**. OAuth 2.1 is in scope (Stage 7). Ratified 2026-08-16.
+1. **M1 boundary** → **the phone**. OAuth 2.1 is in scope (Stage 5). Ratified 2026-08-16.
 2. **Run-commuting** → **no** — not feasible (sweat, no facilities). Design instruction carried forward: _"focus on the framework so this will support varying training"_ — availability and session placement stay fully data-driven, with no slot shape baked into the planner.
 
-### Open questions — still open (do not block Stages 0–3)
+### Open questions — still open (do not block Stages 0–5)
 
-3. **The returning-from-rest ramp rule.** Week 2 goes 20 → 40 km against a 30 km pre-rest baseline: +33%, over the +15% cap either way. `GUARDRAILS.returningFromRestRampCapPct` is a placeholder at 35. Needed before Stage 8 (guardrail enforcement).
-4. **How musculoskeletal load enters readiness.** The specs mandate two components, then define readiness without one, and `07-wiring-todo.md:23` says "total-load only", contradicting the design. Needed before Stage 6. **My recommendation**, for ratification: musculoskeletal TSB gates _quality_ sessions only; cardio TSB drives the overall green/amber/red. That preserves the swim-continues-through-recovery behaviour the spec explicitly wants, without inventing a blended score.
-5. **CTL seeding.** History starts 2026-07-05, so CTL has under one time constant until roughly mid-September. Practitioners either backfill months of data or hand-seed CTL and ignore the first ~6 weeks. **Recommendation**: hand-seed CTL from the stated ~30 km/week baseline and have every verdict carry an explicit `warmingUp` flag until 42 days of history exist (REDLINES rule 4). Needed before Stage 6.
+3. **The returning-from-rest ramp rule.** Week 2 goes 20 → 40 km against a 30 km pre-rest baseline: +33%, over the +15% cap either way. `GUARDRAILS.returningFromRestRampCapPct` is a placeholder at 35. Needed before Stage 6 (guardrail enforcement).
+4. **How musculoskeletal load enters readiness.** The specs mandate two components, then define readiness without one, and `07-wiring-todo.md:23` says "total-load only", contradicting the design. Needed before Stage 9. **My recommendation**, for ratification: musculoskeletal TSB gates _quality_ sessions only; cardio TSB drives the overall green/amber/red. That preserves the swim-continues-through-recovery behaviour the spec explicitly wants, without inventing a blended score.
+5. **CTL seeding.** History starts 2026-07-05, so CTL has under one time constant until roughly mid-September. Practitioners either backfill months of data or hand-seed CTL and ignore the first ~6 weeks. **Recommendation**: hand-seed CTL from the stated ~30 km/week baseline and have every verdict carry an explicit `warmingUp` flag until 42 days of history exist (REDLINES rule 4). Needed before Stage 9.
 
 ### Volume feasibility without run-commuting — the arithmetic
 
@@ -142,16 +168,16 @@ The spec calls run-commutes "the biggest lever for fitting 60 km around five swi
 | #   | Assumption                                                                                | Confidence                       | How to verify                                                                                                  | Fallback if wrong                                                                          |
 | --- | ----------------------------------------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | 1   | SDK v2 `createMcpHandler` works inside a Next 16 App Router route on Vercel               | Med-High                         | **Stage 0 spike, before any code**                                                                             | `mcp-handler@2.1.1`, or SDK v1 as DHT uses                                                 |
-| 2   | claude.ai adds a connector against an SDK-v2 stateless server                             | Med                              | Stage 7, on the real deployment                                                                                | Keep Claude Code path working; fall back to DHT's exact v1 shape                           |
+| 2   | claude.ai adds a connector against an SDK-v2 stateless server                             | Med                              | Stage 5, on the real deployment                                                                                | Keep Claude Code path working; fall back to DHT's exact v1 shape                           |
 | 3   | An `ENABLE ALWAYS` trigger blocks the owner on **Neon** as it does on stock Postgres 18.6 | Med                              | **Stage 0 spike against a real Neon branch** — Neon's role model differs (`neon_superuser`, no true superuser) | Rely on the role-grant layer plus a CI assertion; document the gap in the ledger           |
 | 4   | `pg` Pool + `attachDatabasePool()` is right for Neon on Fluid compute                     | Med                              | Stage 1; monitor Neon connection count after week 1                                                            | Neon HTTP driver, accepting loss of interactive transactions                               |
 | 5   | Drizzle 1.0 does not GA mid-block, or upgrades cleanly                                    | Low-Med                          | Watch the `rc` tag                                                                                             | Pin exact versions; defer the upgrade past the race                                        |
 | 6   | Four weekday morning runs are sustainable                                                 | Low — behavioural, not technical | Weeks 3–4 of real use                                                                                          | Macro targets get revised down; the planner must surface the shortfall rather than hide it |
-| 7   | A hand-seeded CTL produces sane readiness in weeks 1–4                                    | Low                              | Stage 6 against the real July–August activity history                                                          | `warmingUp` flag suppresses the verdict entirely rather than showing a misleading amber    |
+| 7   | A hand-seeded CTL produces sane readiness in weeks 1–4                                    | Low                              | Stage 9 against the real July–August activity history                                                          | `warmingUp` flag suppresses the verdict entirely rather than showing a misleading amber    |
 
 ### Pre-mortem
 
-1. **The engine is beautiful and he never talks to it.** The most likely failure by far. Mitigated by ordering: Stages 0–7 deliver a phone-usable coach _before_ the deep load modelling in Stages 8–10.
+1. **The engine is beautiful and he never talks to it.** The most likely failure by far. Mitigated by ordering: Stages 0–5 deliver a phone-usable coach, Stages 6–7 add the guardrails and negotiation that make it a coach rather than a spreadsheet, and only then do Stages 8–9 build the load modelling.
 2. **The two-component model is invented and produces nonsense.** No literature validates a computed cardio/MSK split. Mitigated by building MSK as **mechanical work in joules** — dimensionally honest, computable from mass + GPS — rather than a second invented 0–100 score, and by keeping every coefficient a named calibration knob.
 3. **Units discontinuity fakes an alarm.** Foster sRPE at ~180–360 AU/h versus TSS at ~100/h would triple ATL on an HR-less week. Mitigated by anchoring all three cascade tiers to one currency: _one hour at threshold = 100_.
 4. **Elevation double-counted.** Ascent is already inside HR and inside grade-adjusted pace. Mitigated by applying the descent multiplier **only** when the cardio score came from the pace tier, with an explicit test.
@@ -172,7 +198,7 @@ The spec calls run-commutes "the biggest lever for fitting 60 km around five swi
 
 **In scope**
 
-- Postgres schema for Athlete, Race, Week, Session, Activity, CheckIn, AvailabilityRule, WellnessSnapshot, PlanRevision, DecisionLog — with DB-level append-only guards on the four irreplaceable history tables.
+- Postgres schema, **five tables first**: `weeks`, `sessions`, `activities`, `check_ins`, `races` — with DB-level append-only guards on `activities` and `check_ins` from the very first migration. `wellness_snapshots` waits for the Garmin branch, `availability_rules` for the planner, `plan_revisions` and `decision_log` for replanning. The guards are the exception to that deferral: retrofitting them onto a table that already holds data is the painful case, and it is the one irreversible decision in this plan.
 - Stress scoring: three-tier cascade normalised to one currency; two components (cardio score, musculoskeletal joules); surface, descent and footwear-novelty multipliers.
 - Rolling load state: ATL/CTL/TSB per component over calendar days; daily readiness with renormalising weights and an explicit warm-up state.
 - Two-layer planner: macro weekly targets seeded from `06-training-block.md`; micro rolling 7–10 day window placed against availability; hard guardrails that negotiate.
@@ -197,7 +223,7 @@ The spec calls run-commutes "the biggest lever for fitting 60 km around five swi
 
 ### TDD workflow
 
-Per stage: `test-driven-development` → RED (fails for the right reason) → GREEN → REFACTOR → `code-reviewer` (plus `security-reviewer-fullstack` on 1, 6, 7) → `verification-before-completion`. Gating, and non-clean **blocks the stage**, fixed and re-run before commit:
+Per stage: `test-driven-development` → RED (fails for the right reason) → GREEN → REFACTOR → `code-reviewer` (plus `security-reviewer-fullstack` on 1, 4, 5) → `verification-before-completion`. Gating, and non-clean **blocks the stage**, fixed and re-run before commit:
 
 ```
 npm run typecheck && npm run lint && npm run format:check && npm run test
@@ -255,7 +281,7 @@ Two viable sources. The probe in Stage 0 decides, by reading a real payload rath
 
 ### Stage 1 — Database foundation: schema, append-only guards, connection
 
-**Goal**: Every entity in `01-domain-model.md` exists as a typed Drizzle schema on Neon, and the four history tables physically reject `UPDATE`/`DELETE`.
+**Goal**: The five tables the MVP needs exist as a typed Drizzle schema on Neon, and the two history tables physically reject `UPDATE`/`DELETE`.
 **Why**: REDLINES rule 2, and everything downstream reads and writes through it. Getting the store decision wrong here means the migration touches the engine, the planner, every tool and every test.
 **Depends on**: Stage 0.
 **Files**: `db/schema.ts`, `db/client.ts`, `db/migrations/0000_init/`, `db/migrations/0001_append_only_guards/` (custom SQL), `drizzle.config.ts`, `vitest.integration.setup.ts`, `db/schema.test.ts`.
@@ -264,11 +290,12 @@ Two viable sources. The probe in Stage 0 decides, by reading a real payload rath
 
 - Pin **exact** versions, no caret: `drizzle-orm@0.45.2`, `drizzle-kit@0.31.10`, `pg@8.23.0`, `@vercel/functions@3.9.3`. Do **not** install `@neondatabase/serverless`.
 - `db/client.ts`: a module-scope `pg.Pool` with `max: 3` against the **pooled** `-pooler` host from `DATABASE_URL`, registered with `attachDatabasePool()`. A second `DATABASE_URL_UNPOOLED` (direct host) is used **only** by `drizzle-kit migrate` and `psql` — PgBouncer transaction mode cannot do session-level operations.
-- Schema: `activities`, `check_ins`, `wellness_snapshots`, `decision_log` are the **append-only four**. `sessions`, `weeks`, `availability_rules` are mutable (the plan changes; history does not). A completed session links to its fulfilling activity rather than being overwritten.
+- Schema, **five tables only**: `weeks`, `sessions`, `races` (mutable — the plan changes) and `activities`, `check_ins` (**append-only** — history does not). A completed session links to its fulfilling activity rather than being overwritten.
+- **Deferred until the feature that needs them lands**: `wellness_snapshots` (the Garmin branch, once G1 decides the payload shape — designing it before the probe returns is exactly what G1 forbids), `availability_rules` (Stage 6), `plan_revisions` and `decision_log` (Stage 7). Adding a table later is an additive migration; adding a guard to a populated table is not, which is why the guards below are the one thing that cannot wait.
 - `0001_append_only_guards` generated with `drizzle-kit generate --custom --name=append_only_guards`, committed and reviewed **in the same PR as the schema it protects**. Three layers, because none is sufficient alone:
   - `app_rw` role with `SELECT, INSERT` only, plus `ALTER DEFAULT PRIVILEGES` so future tables inherit it. Binds the application role (42501) but is void against the owner, who may re-grant to itself.
   - `ENABLE ALWAYS BEFORE UPDATE OR DELETE FOR EACH ROW` trigger plus a `BEFORE TRUNCATE FOR EACH STATEMENT` trigger, both raising `ERRCODE 'restrict_violation'` (23001). Binds the owner.
-  - An `sql_drop` event trigger protecting the four tables by name, with a documented, deliberately awkward escape hatch for legitimate teardown.
+  - An `sql_drop` event trigger protecting the guarded tables by name, with a documented, deliberately awkward escape hatch for legitimate teardown. The name list is a maintenance trap: every later append-only table must be added to it, so assert in CI that the list matches the guarded set.
 - **Rejected on verified evidence**: rules (`DO INSTEAD NOTHING`) and RLS-without-an-UPDATE-policy. Both fail **silently** — the rule reported `UPDATE 0` and left the row intact, which is worse than no guard.
 
 **Codebase patterns to follow**: DHT's store seam (`lib/push-store.ts`) — `*-types.ts` with zero imports, `*-memory.ts` for tests, `*-drizzle.ts` real, and a small factory exposing a `configured()` predicate. Add `import "server-only"` to the real implementation.
@@ -358,7 +385,7 @@ it('refuses to add a cardio score to musculoskeletal joules', ...); // type-leve
 - **Source: the Garmin bulk account export** requested at Stage 0. It is the only sanctioned complete-history route, it includes `DI_CONNECT/DI-Connect-Wellness/`, and it needs no API access at all. `GarminDB` already parses this archive shape — read its parser rather than writing one.
 - This is a **one-off script, not the sync**. It shares the store seam and nothing else. Running it twice must be idempotent (upsert by `calendar_date` / activity id).
 - **Provenance columns are mandatory, not nice-to-have**: `fetched_at`, `source` (`bulk-export` | `bridge` | `library` | `manual`), and a completeness flag. **"Not worn" and "not yet synced" are different states** — conflating them makes the 42-day average silently interpolate across holes, and a watch left on the charger is not a rest day.
-- Capture Garmin's own `dailyTrainingLoadAcute` / `dailyTrainingLoadChronic` where the export carries them. The chronic figure is the **warm-start seed** for Stage 7; without it the CTL series has to ramp from zero.
+- Capture Garmin's own `dailyTrainingLoadAcute` / `dailyTrainingLoadChronic` where the export carries them. The chronic figure is the **warm-start seed** for Stage 9; without it the CTL series has to ramp from zero.
 - Store the raw payload alongside the parsed row. Field shapes are the least-verified thing in this whole plan; keep the evidence.
 
 **Observability**: `backfill source=%s days=%d activities=%d wellness_days=%d gaps=%d`. The gap count is the number worth reading — it is the honest measure of how warm the model actually is.
@@ -373,7 +400,7 @@ it('reports the gap count rather than silently interpolating', ...);
 it('extracts a chronic-load seed when the export carries one', ...);
 ```
 
-**Post-stage**: `code-reviewer`. Then the honest check: how many of the last 42 days actually have data, and does Stage 7 still say `warmingUp`?
+**Post-stage**: `code-reviewer`. Then the honest check: how many of the last 42 days actually have data, and does Stage 9 still say `warmingUp`?
 **Risks**: the export may not contain what we expect — it is an archive format, not an API contract. Mitigated by reading `GarminDB`'s parser first and by storing raw payloads.
 **Rollback**: the history tables are append-only, so a bad import cannot be deleted. **Import into a staging table first and promote after inspection** — this is the one place in the plan where append-only works against us.
 **Status**: [ ] Not Started
@@ -453,7 +480,73 @@ it('threads the authenticated principal into the tool handler', ...);
 
 ---
 
-### Stage 6 — Full stress cascade and context multipliers
+### Stage 6 — Planner: macro seed, micro placement, guardrails
+
+**Goal**: Weekly targets and a rolling 7–10 day window placed against availability, with guardrails that negotiate rather than silently comply.
+**Depends on**: Stage 3 (store seam) — **not** the load engine. **Blocked on open question 3.**
+**Files**: `domain/planner/macro.ts`, `domain/planner/micro.ts`, `domain/planner/guardrails.ts`, plus tests.
+
+**Why this precedes the load engine.** Three of the four hard guardrails need only distance and the schedule:
+the ramp cap compares weekly km against last week; the minimum rest-or-swim-only day and taper protection read
+the schedule alone; and the quality gate on soreness reads the check-in. None needs TSS, ATL, CTL, TSB or the
+two-component model. The behaviour that makes this a coach rather than a spreadsheet is therefore reachable
+before any of the load modelling, which is why it moved ahead of it (`docs/decisions.md`, 2026-08-18).
+The one guardrail input that genuinely needs load state — a readiness **red** as a distinct signal from raw
+soreness — is deferred to Stage 9 and expressed here in terms of the check-in alone.
+
+**Approach**:
+
+- **The macro layer is already authored.** `config/training.ts` `SEED_WEEKS` is typed, tested data covering all
+  11 weeks with phases and km targets, guarded by `config/training.test.ts`. Seeding is an insert, not an
+  authoring job — read it, do not re-derive it.
+- Availability is **fully data-driven** — no slot shape baked in (Luis's design instruction). Run-commute slots exist as a capability the model supports and the data does not currently enable.
+- Placement rules from `03-planner.md:7-11`: one long run per week; max one quality session in build; never on consecutive days; never the day after a race or long run; swims coexist with easy runs but not with quality-plus-long.
+- Guardrail response pattern: state the rule, quantify the cost of breaking it, offer the closest compliant alternative, allow explicit override of everything except the taper and injury gates, and log every override.
+- **A missed weekday morning is a first-class replan trigger**, not an exception — the volume arithmetic shows four weekday mornings with no slack.
+
+**TDD — RED**:
+
+```ts
+it('fits week 6 (60km) into available slots without run-commutes, or reports the shortfall', ...);
+it('reports a shortfall rather than silently generating an unrunnable week', ...);
+it('never places quality on consecutive days', ...);
+it('never places quality the day after the long run', ...);
+it('protects the final two weeks from any addition above target', ...);
+it('offers a compliant alternative when a request breaks the ramp cap', ...);
+```
+
+**Post-stage**: `code-reviewer`.
+**Risks**: the planner could generate a technically-compliant week that is humanly unrunnable. The shortfall test is the guard.
+**Status**: [ ] Not Started
+
+---
+
+### Stage 7 — Replan, negotiation, and the remaining tools
+
+**Goal**: Loops A and B work end to end; the full nine-tool surface ships.
+**Depends on**: Stage 6.
+**Files**: `domain/replan.ts`, `mcp/tools.ts`, plus tests.
+
+**Approach**: Every replan returns a **diff plus plain-language rationale** ("moved Thu quality → Sat, killed Fri easy, week stays at 52km"). Loop A must keep counterfactuals to explain the trade it made — that is the hard part, not the re-placement. Tools never dead-end: a guardrail refusal always carries a counter-offer.
+**TDD — RED**: the two acceptance loops from `00-overview.md:9-11`, driven through `tools/call`:
+
+```ts
+it('Loop A: a 30km request over the ramp cap is negotiated with a costed alternative', ...);
+it('Loop A: an unplanned 30km logged after the fact downgrades the next quality session', ...);
+it('Loop B: severe DOMS rebuilds the week easy-or-nothing and leaves swim volume untouched', ...);
+it('Loop B: quality stays gated until reported soreness clears', ...);  // check-in only at this stage
+it('every replan response names what moved and what it cost', ...);
+```
+
+Loop B's recovery signal is the **subjective check-in alone** here. `02-load-engine.md:21` also wants HRV and
+resting HR in that gate; those terms arrive with Stage 9 and upgrade this behaviour without changing its shape.
+
+**Post-stage**: `code-reviewer`, then the full suite.
+**Status**: [ ] Not Started
+
+---
+
+### Stage 8 — Full stress cascade and context multipliers
 
 **Goal**: Tiers 1 and 2 of the cascade, plus the musculoskeletal component in joules.
 **Depends on**: Stage 2.
@@ -486,10 +579,10 @@ The first two together are the whole point of the two-component model and are dr
 
 ---
 
-### Stage 7 — Rolling load state and readiness
+### Stage 9 — Rolling load state and readiness
 
 **Goal**: ATL/CTL/TSB per component and a daily green/amber/red with an honest warm-up state.
-**Depends on**: Stage 6. **Blocked on open questions 4 and 5.**
+**Depends on**: Stage 8. **Blocked on open questions 4 and 5.**
 **Files**: `domain/load-state.ts`, `domain/readiness.ts`, plus tests.
 
 **Approach**:
@@ -522,58 +615,6 @@ it('does not change the run verdict when only swim load rose', ...);  // the swi
 
 ---
 
-### Stage 8 — Planner: macro seed, micro placement, guardrails
-
-**Goal**: Weekly targets and a rolling 7–10 day window placed against availability, with guardrails that negotiate rather than silently comply.
-**Depends on**: Stage 7. **Blocked on open question 3.**
-**Files**: `domain/planner/macro.ts`, `domain/planner/micro.ts`, `domain/planner/guardrails.ts`, plus tests.
-
-**Approach**:
-
-- Availability is **fully data-driven** — no slot shape baked in (Luis's design instruction). Run-commute slots exist as a capability the model supports and the data does not currently enable.
-- Placement rules from `03-planner.md:7-11`: one long run per week; max one quality session in build; never on consecutive days; never the day after a race or long run; swims coexist with easy runs but not with quality-plus-long.
-- Guardrail response pattern: state the rule, quantify the cost of breaking it, offer the closest compliant alternative, allow explicit override of everything except the taper and injury gates, and log every override.
-- **A missed weekday morning is a first-class replan trigger**, not an exception — the volume arithmetic shows four weekday mornings with no slack.
-
-**TDD — RED**:
-
-```ts
-it('fits week 6 (60km) into available slots without run-commutes, or reports the shortfall', ...);
-it('reports a shortfall rather than silently generating an unrunnable week', ...);
-it('never places quality on consecutive days', ...);
-it('never places quality the day after the long run', ...);
-it('protects the final two weeks from any addition above target', ...);
-it('offers a compliant alternative when a request breaks the ramp cap', ...);
-```
-
-**Post-stage**: `code-reviewer`.
-**Risks**: the planner could generate a technically-compliant week that is humanly unrunnable. The shortfall test is the guard.
-**Status**: [ ] Not Started
-
----
-
-### Stage 9 — Replan, negotiation, and the remaining tools
-
-**Goal**: Loops A and B work end to end; the full nine-tool surface ships.
-**Depends on**: Stage 8.
-**Files**: `domain/replan.ts`, `mcp/tools.ts`, plus tests.
-
-**Approach**: Every replan returns a **diff plus plain-language rationale** ("moved Thu quality → Sat, killed Fri easy, week stays at 52km"). Loop A must keep counterfactuals to explain the trade it made — that is the hard part, not the re-placement. Tools never dead-end: a guardrail refusal always carries a counter-offer.
-**TDD — RED**: the two acceptance loops from `00-overview.md:9-11`, driven through `tools/call`:
-
-```ts
-it('Loop A: a 30km request over the ramp cap is negotiated with a costed alternative', ...);
-it('Loop A: an unplanned 30km logged after the fact downgrades the next quality session', ...);
-it('Loop B: severe DOMS rebuilds the week easy-or-nothing and leaves swim volume untouched', ...);
-it('Loop B: quality stays gated until a recovery signal clears', ...);
-it('every replan response names what moved and what it cost', ...);
-```
-
-**Post-stage**: `code-reviewer`, then the full suite.
-**Status**: [ ] Not Started
-
----
-
 ### Stage 10 — Seed data and end-to-end validation
 
 **Goal**: The Battersea block is loaded and the whole loop is proven with recorded evidence.
@@ -585,7 +626,7 @@ it('every replan response names what moved and what it cost', ...);
 1. `npm run typecheck && lint && format:check && test` green — log path.
 2. Integration suite against real Postgres green, with the `globalSetup` throw armed — log path.
 3. Guards: `check_gate_ledger.py`, `test_guards.py` — output.
-4. Seed loads the 11 macro weeks and 4 races; a second run is idempotent.
+4. Seed loads the 11 macro weeks and 4 races **from `config/training.ts` `SEED_WEEKS`** — an insert, not an authoring job; a second run is idempotent.
 5. Backfill the real July–August activity history; CTL reports `warmingUp` — screenshot.
 6. Phone: add the connector, `get_status`, log a run, check in — screenshots.
 7. Loop A and Loop B driven from the phone in natural language — transcript.
@@ -636,12 +677,30 @@ None of this is code, and the first item has a multi-day turnaround, so it gates
 
 ---
 
+### Access is a prerequisite, and it is currently absent
+
+Verified 2026-08-18:
+
+- **There is no Garmin MCP connector on this machine at all.** No Garmin API access exists in any form today.
+- **The Strava connector is installed but unauthenticated** — only `authenticate` and `complete_authentication` are exposed,
+  which is the shape an MCP server takes before its OAuth flow has been completed. Strava is not a substitute here in any
+  case: it strips the granular wellness metrics that were the whole reason for choosing Garmin.
+
+**The distinction that matters, because it is easy to conflate.** An authenticated connector in a Claude session grants
+_Claude_ read access for probing and prototyping — useful for running the G1 probe against a real payload without writing
+code first. It is **not** a credential the deployed app can use. rocket needs its own registration and its own tokens in its
+own environment regardless of what any conversational session can reach: an intervals.icu personal API key under Branch A, or
+Garmin credentials plus a bootstrapped token row under Branch B. Nothing in Stage 0 or Stage 3b is unblocked by connecting a
+session-level tool.
+
+---
+
 ### Holistic rollback
 
 - **Order**: reverse-chronological, 10 → 1. Stages 2, 6, 7, 8, 9 are pure domain code and revert cleanly.
 - **Point of no return: Stage 1, the moment real training data lands.** After that the schema cannot be dropped and re-created — that is the entire premise of the append-only rule. Schema changes past that point are additive migrations only. The event trigger will block a `drizzle-kit migrate` that drops a protected table, which is the desired behaviour and requires the documented escape hatch to override deliberately.
 - **Persisting state after rollback**: logged activities and check-ins survive by design. OAuth tokens are stateless and die with a secret rotation. Connector entries in claude.ai must be removed by hand.
-- **Partial-failure posture**: every stage leaves a working system. Stage 4 alone ships a Claude Code coach; Stage 5 ships the phone. Stages 6–9 deepen a system already in daily use.
+- **Partial-failure posture**: every stage leaves a working system. Stage 4 alone ships a Claude Code coach; Stage 5 ships the phone; Stages 6–7 make it argue back. Stages 8–9 deepen a system already in daily use.
 
 ---
 
@@ -663,7 +722,7 @@ None of this is code, and the first item has a multi-day turnaround, so it gates
 - [ ] Every tool call, auth rejection, OAuth grant and replan emits one greppable `key=value` line; no secrets, no check-in note contents
 - [ ] No duplication: one currency conversion, one store seam, one guardrail evaluator
 - [ ] Every Phase 1 assumption validated or its fallback executed
-- [ ] Open questions 3, 4 and 5 answered before Stages 7 and 8
+- [ ] Open questions 3, 4 and 5 answered before Stages 6 and 9
 
 ### Skill/agent gates
 
@@ -677,15 +736,15 @@ None of this is code, and the first item has a multi-day turnaround, so it gates
 ## Phase 4 — Todo breakdown
 
 - [ ] **S0**: SDK v2 spike · Neon `ENABLE ALWAYS` spike · zod-3 probe · **Garmin source probe (G1)** · **request the bulk export** · record results here
-- [ ] **S1**: pinned deps · `db/client.ts` pool + `attachDatabasePool` · schema · init migration · custom guard migration (role, triggers, event trigger) · integration `globalSetup` throw · SQLSTATE tests · security review
+- [ ] **S1**: pinned deps · `db/client.ts` pool + `attachDatabasePool` · **five-table** schema · init migration · custom guard migration (role, triggers, event trigger) · integration `globalSetup` throw · SQLSTATE tests · security review
 - [ ] **S2**: branded types · RPE tier · currency anchor tests
 - [ ] **S3**: four-file store seam · shared contract suite over both impls
 - [ ] **S3b**: bulk export parsed (read `GarminDB`'s parser first) · provenance columns · staging-table-then-promote · idempotency + gap-count tests · chronic-load seed extracted
 - [ ] **S4**: `/api/mcp` route · 3 tools · `ok`/`fail`/`reason` · both well-known docs · `npm ls zod` gate · client-driven contract tests · Claude Code manual check · security review
 - [ ] **S5**: OAuth routes · owner allowlist · `typ` separation · CIMD + DCR · port-agnostic loopback · principal threading · PKCE flow tests · **phone connector check** · security review
-- [ ] **S6**: TRIMP + pace tiers · MSK joules · descent-only-on-pace-tier · trail-vs-road regression pair
-- [ ] **S7**: ATL/CTL/TSB calendar-day recurrence · **warm-start CTL from a seed** · readiness renormalisation · `warmingUp` · Garmin oracle stored alongside and reconciled
-- [ ] **S8**: macro seed · micro placement · guardrails · week-6 feasibility test
-- [ ] **S9**: replan diffs + rationale · Loops A and B through `tools/call` · remaining tools
+- [ ] **S6**: macro seed read from `SEED_WEEKS` · micro placement · guardrails (distance + schedule + check-in only) · week-6 feasibility test
+- [ ] **S7**: replan diffs + rationale · Loops A and B through `tools/call` · remaining tools
+- [ ] **S8**: TRIMP + pace tiers · MSK joules · descent-only-on-pace-tier · trail-vs-road regression pair
+- [ ] **S9**: ATL/CTL/TSB calendar-day recurrence · **warm-start CTL from a seed** · readiness renormalisation · `warmingUp` · Garmin oracle stored alongside and reconciled
 - [ ] **S10**: seed · backfill · ten-item validation with named artifacts
 - [ ] Close-out: ledger swept, spec amendments raised (`03-planner.md:11` run-commute framing; the two spec defects). Record the G1 branch taken as a decision-log entry.
