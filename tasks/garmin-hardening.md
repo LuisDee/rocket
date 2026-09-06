@@ -62,4 +62,4 @@ new `tools/garmin_probe/garmin_guard.py`, `tools/garmin_probe/test_garmin.py`,
 
 ## Commits
 
-(populated as work lands)
+- `68590c0` feat(garmin): make an account lockout structurally impossible
