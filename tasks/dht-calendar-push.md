@@ -50,8 +50,8 @@ It cannot satisfy per-user isolation and was abandoned rather than patched.
 - [x] Remove the shared-calendar marker implementation (superseded)
 - [x] Verify DHT's store seam, auth model and key shapes from `origin/main`
 - [x] Write `docs/DHT_PRIVATE_TRAINING_DESIGN.md`
-- [ ] Gates green
+- [x] Gates green (typecheck red from another agent's in-flight src/db/client.ts)
 
 ## Commits
 
-(populated as work lands)
+- `6f3ed18` docs: design private per-user training in DoHardThings
