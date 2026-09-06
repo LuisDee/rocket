@@ -46,8 +46,26 @@ export const BLOCK = {
  * override is logged.
  */
 export const GUARDRAILS = {
-  /** Weekly run km may rise at most this much week-over-week. */
+  /**
+   * Standard weekly ramp cap: run km may rise at most this much week-over-week.
+   * Retained as the conservative default a normal block would run under.
+   */
   rampCapPct: 15,
+
+  /**
+   * The cap in force during a deliberate aggressive rebuild.
+   *
+   * Raised from 15 % on 2026-09-06 at Luis's explicit instruction, not to make
+   * an inconvenient plan pass. The 15 % cap would have been breached by every
+   * single week of this block, and a guardrail overridden every week is
+   * repealed in practice -- worse than absent, because it trains the athlete to
+   * click through the one warning that eventually matters. 35 % still fires on
+   * a genuine spike: the 20 -> 60 step into week 2 is +72 % and is caught.
+   */
+  aggressiveRampCapPct: 35,
+
+  /** Which cap this block runs under. See ACTIVE_RAMP_CAP_PCT. */
+  rampMode: 'aggressive',
 
   /**
    * A week whose predecessor is not a valid ramp baseline -- forced rest, or a
@@ -60,6 +78,19 @@ export const GUARDRAILS = {
    */
   returningFromRestRampCapPct: 35,
 
+  /**
+   * Above this weekly volume, the week must be spread across at least
+   * `minRunDaysAtHighVolume` running days.
+   *
+   * 100 km over five days is 20 km a day; over seven it is 14. Same weekly
+   * total, materially different per-session tissue load -- and tissue load is
+   * what breaks in a ramp this steep. Without this the planner is free to
+   * satisfy a 100 km week with five 20 km runs, which is the shape that
+   * produces the injury this block cannot absorb.
+   */
+  highVolumeThresholdKm: 80,
+  minRunDaysAtHighVolume: 6,
+
   /** Minimum full rest or swim-only days per week. */
   minRestOrSwimOnlyDaysPerWeek: 1,
 
@@ -71,6 +102,45 @@ export const GUARDRAILS = {
 
   /** The final N weeks are protected: nothing may be added above target. */
   protectedTaperWeeks: 2,
+} as const;
+
+/**
+ * The ramp cap actually in force. Everything that checks a ramp reads this
+ * rather than picking a cap itself, so the mode cannot be honoured in one place
+ * and ignored in another.
+ */
+export const ACTIVE_RAMP_CAP_PCT: number =
+  GUARDRAILS.rampMode === 'aggressive'
+    ? GUARDRAILS.aggressiveRampCapPct
+    : GUARDRAILS.rampCapPct;
+
+/**
+ * What the athlete's week actually contains, corrected 2026-09-06.
+ *
+ * The spec pack assumed swimming five evenings a week plus a lesson, and the
+ * original feasibility arithmetic concluded from that that weekday running was
+ * confined to early mornings. Both premises were wrong: swimming is a single
+ * two-hour session per week, and there is no cycling at all.
+ *
+ * This is load-bearing for the block above rather than a detail. Four freed
+ * evenings mean evening runs and AM/PM doubles are available, which is the
+ * difference between a 100 km week being a 05:30 alarm every weekday and being
+ * comfortably spread. The volume plan is more feasible than the availability
+ * model implied, not less.
+ *
+ * Slots themselves are the planner's job against AvailabilityRule data; this
+ * records only the facts the block depends on.
+ */
+export const AVAILABILITY = {
+  /** One session, roughly two hours. Not five evenings. */
+  swimSessionsPerWeek: 1,
+  swimSessionHours: 2,
+
+  /** Evenings not taken by swimming, and therefore available for running. */
+  freeEveningsPerWeek: 6,
+
+  /** No cycling. Not modelled for availability or load. */
+  cycles: false,
 } as const;
 
 /**
@@ -178,7 +248,7 @@ export const SHOES = {
 
   /**
    * The actual inventory, resolved 2026-09-06. The daily trainer was bought,
-   * which retires a named prerequisite for this block: ramping to 58 km weeks
+   * which retires a named prerequisite for this block: ramping to 100 km weeks
    * on carbons or trail shoes was called out as an injury risk, and is no
    * longer the plan.
    *
@@ -234,25 +304,42 @@ export const SYNC = {
   staleAfterHours: 36,
 } as const;
 
+/** One planned day. `km: 0` is a rest day; `kind` says what it is for. */
+export type DayPlan = {
+  readonly date: string;
+  readonly km: number;
+  readonly kind: 'easy' | 'long' | 'quality' | 'rest';
+  readonly note?: string;
+};
+
 /**
- * The macro layer, re-derived 2026-09-06 from measured Garmin history rather
- * than from the spec's assumed block. Weekly run-km targets and the long run
- * that anchors each week.
+ * The macro layer, re-cut 2026-09-06 to the aggressive volume block Luis chose:
+ * 60 / 80 / 100 / 80 / 60, peaking at 100 km in the week of 28 September.
  *
- * Structure: this week tapers into the Battersea Half (Sat 12 Sep), then four
- * build weeks, then two taper weeks into the marathon (Sat 24 Oct). 48 days
- * from re-derivation to race day.
+ * Why this shape rather than the 35/45/52/58 it replaces. The recent eleven-week
+ * window that produced those numbers caught a trough -- a light summer and a
+ * holiday -- not a ceiling. Deeper history shows a real spring block: 45.8, 48.0
+ * and 57.1 km weeks in April and May, the last of them carrying a 42.7 km long
+ * run. Luis further states he has run 60 km weeks comfortably and that some
+ * history never reached Garmin. That is stipulated, not re-litigated.
  *
- * The long runs are the binding constraint, not the weekly totals -- only four
- * fit before the taper, against the six to eight a normal block would carry,
- * and long-run durability is what the closing 10 km is made of. The longest
- * lands Sun 4 Oct, 20 days out, with a deliberate cut-back the Sunday after.
+ * Peak volume AND the peak long run both land in the week of 28 Sep, leaving
+ * three full taper weeks. That was deliberate over putting 100 km in the week of
+ * 5 Oct, which would have left only two -- his own framing was "get it in early
+ * and taper right down".
  *
  * `rampExemption` is non-null exactly when the step INTO that week exceeds
- * GUARDRAILS.rampCapPct. Three steps do. They are recorded here rather than
- * absorbed by quietly raising the cap, because docs/specs/03-planner.md:28
- * requires a guardrail breach to be named and costed, never silently executed.
- * Two of the three are UNRATIFIED and need Luis's explicit override.
+ * ACTIVE_RAMP_CAP_PCT. Under the 35 % aggressive cap exactly one step does, and
+ * it is the one that deserves the attention: the return from a race taper into
+ * a 60 km week. The 80 (+33 %) and 100 (+25 %) steps sit inside the cap.
+ *
+ * The honest risk, recorded because docs/specs/03-planner.md:28 requires a
+ * breach to be named and costed rather than silently executed: 100 km is
+ * roughly 75 % above anything in the recorded history, reached in three weeks,
+ * in a new shoe. The destination is not the hazard; the slope is. The
+ * mitigations that carry the weight are `minRunDaysAtHighVolume` (spreading the
+ * load rather than concentrating it), keeping nearly all of it easy, and the
+ * week-2 check-in gate in CHECK_IN_GATES.
  */
 export const BLOCK_WEEKS = [
   {
@@ -261,60 +348,92 @@ export const BLOCK_WEEKS = [
     phase: 'race-taper',
     targetKm: 20,
     longRunKm: null,
+    minRunDays: 4,
     rampExemption: null,
+    days: null,
     note: 'Taper into the Battersea Half, Sat 12 Sep. Not a training week, and not a valid ramp baseline.',
   },
   {
     week: 2,
     monday: '2026-09-14',
     phase: 'rebuild',
-    targetKm: 35,
-    longRunKm: 22,
+    targetKm: 60,
+    longRunKm: 20,
+    minRunDays: 6,
     rampExemption:
-      '+75.0% on paper, but the prior week is a race taper rather than a training baseline. ' +
-      'Measured against MEASURED_BASE.preTaperBaselineKm (34.8 km, w/c 17 Aug) this is +0.6%. ' +
-      'RATIFIED by the returning-from-rest rule.',
-    note: 'Two to four genuinely easy days after the half first. Long run Sun 20 Sep, 8 days post-race.',
+      '+72.4% on MEASURED_BASE.preTaperBaselineKm (34.8 km, w/c 17 Aug), over the 35% aggressive ' +
+      'cap. RATIFIED by Luis 2026-09-06, explicitly and after the cost was stated. Grounds: the ' +
+      'spring block reached 57.1 km with a 42.7 km long run, and he stipulates 60 km weeks are ' +
+      'comfortable for him. This is the one step in the block the guardrail catches, and it is ' +
+      'the one that matters -- it begins two days after racing a half.',
+    days: [
+      {
+        date: '2026-09-14',
+        km: 6,
+        kind: 'easy',
+        note: 'Rest instead if the half left anything sore. Two days post-race.',
+      },
+      { date: '2026-09-15', km: 8, kind: 'easy' },
+      { date: '2026-09-16', km: 10, kind: 'easy' },
+      { date: '2026-09-17', km: 10, kind: 'easy' },
+      {
+        date: '2026-09-18',
+        km: 6,
+        kind: 'easy',
+        note: 'Short shakeout before the long run.',
+      },
+      { date: '2026-09-19', km: 20, kind: 'long' },
+      {
+        date: '2026-09-20',
+        km: 0,
+        kind: 'rest',
+        note: 'Rest or swim. Swim carries no impact load.',
+      },
+    ],
+    note: 'Two to four genuinely easy days after the half before this starts. The sharpest risk in the whole block is here, not at the 100.',
   },
   {
     week: 3,
     monday: '2026-09-21',
     phase: 'build',
-    targetKm: 45,
-    longRunKm: 26,
-    rampExemption:
-      '+28.6%, over the 15% cap. Returning to established base rather than exceeding it -- the ' +
-      'ten-week base averaged ~30 km and peaked at 42.3 km (w/c 13 Jul). UNRATIFIED: needs an ' +
-      'explicit override per docs/specs/03-planner.md:28.',
-    note: 'Long run Sun 27 Sep.',
+    targetKm: 80,
+    longRunKm: 30,
+    minRunDays: 6,
+    rampExemption: null,
+    days: null,
+    note: '+33.3%, inside the aggressive cap. Six running days: freed evenings make AM/PM doubles available if a morning is missed.',
   },
   {
     week: 4,
     monday: '2026-09-28',
-    phase: 'build',
-    targetKm: 52,
-    longRunKm: 32,
-    rampExemption:
-      '+15.6%, marginally over the 15% cap. UNRATIFIED. Carries the longest run of the block, so ' +
-      'the week is harder than its total suggests.',
-    note: 'Long run Sun 4 Oct, 20 days out. The one that matters most.',
+    phase: 'peak',
+    targetKm: 100,
+    longRunKm: 35,
+    minRunDays: 7,
+    rampExemption: null,
+    days: null,
+    note: 'Peak volume and peak long run together, 26 days out. +25%, inside the cap. Seven running days: 100 km over five would be 20 km a day.',
   },
   {
     week: 5,
     monday: '2026-10-05',
-    phase: 'peak',
-    targetKm: 58,
-    longRunKm: 24,
+    phase: 'taper',
+    targetKm: 80,
+    longRunKm: 26,
+    minRunDays: 6,
     rampExemption: null,
-    note: 'Peak weekly volume, +11.5% and inside the cap. Cut-back long run Sun 11 Oct, 13 days out.',
+    days: null,
+    note: 'First taper step. Volume comes off before the long run does.',
   },
   {
     week: 6,
     monday: '2026-10-12',
     phase: 'taper',
-    targetKm: 38,
-    longRunKm: null,
+    targetKm: 60,
+    longRunKm: 18,
+    minRunDays: 5,
     rampExemption: null,
+    days: null,
     note: 'Protected. Nothing added above target.',
   },
   {
@@ -323,7 +442,9 @@ export const BLOCK_WEEKS = [
     phase: 'race',
     targetKm: null,
     longRunKm: null,
+    minRunDays: 3,
     rampExemption: null,
+    days: null,
     note: 'Race week. Battersea Park Marathon, Sat 24 Oct. Carbons.',
   },
 ] as const;
@@ -361,6 +482,35 @@ export const MEASURED_BASE = {
 
   /** Longest run in the legs: 2026-08-09, trail, ~600 m descent. */
   longestRecentKm: 31.5,
+
+  /**
+   * The spring block, pulled from deeper Garmin history on 2026-09-06 through
+   * the rate-limit guard. This is the evidence the aggressive ramp rests on:
+   * the eleven-week window above caught a light summer, not a ceiling.
+   */
+  springWeeklyKm: {
+    '2026-03-23': 29.7,
+    '2026-03-30': 17.0,
+    '2026-04-06': 45.8,
+    '2026-04-13': 20.8,
+    '2026-04-20': 48.0,
+    '2026-04-27': 20.5,
+    '2026-05-04': 57.1,
+  },
+
+  /** Highest recorded week, w/c 2026-05-04. */
+  peakRecordedWeekKm: 57.1,
+
+  /** Longest recorded run, in that same week: marathon distance. */
+  longestRecordedRunKm: 42.7,
+
+  /**
+   * Luis states he has run 60 km weeks comfortably and that some history never
+   * reached Garmin or Strava. He instructed that this be stipulated rather than
+   * argued from the recorded data, and it is: the recorded series is a floor on
+   * his capacity, not a measure of it.
+   */
+  stipulatedComfortableWeekKm: 60,
 
   /**
    * Garmin's own load model on 2026-09-06 -- an independent cross-check on
@@ -414,3 +564,48 @@ export const PACE_ESTIMATES = {
    */
   planningBandSeconds: { fast: 13800, slow: 14400 },
 } as const;
+
+/**
+ * Points where the block stops and asks before continuing.
+ *
+ * Luis asked for this explicitly -- "lets go 60 from 14 sep can check in after
+ * that" -- and it is the mechanism that makes an aggressive ramp defensible
+ * rather than reckless: the 80 and the 100 are earned by the weeks before them,
+ * not assumed at authoring time.
+ *
+ * Structured rather than prose so the planner can actually evaluate it. A gate
+ * expressed as a paragraph in a note is a gate nobody applies.
+ */
+export const CHECK_IN_GATES = [
+  {
+    /** Evaluated once this week is complete. */
+    afterWeekMonday: '2026-09-14',
+    decides: 'week 3 target, provisionally 80 km',
+    criteria: [
+      {
+        id: 'soreness',
+        question: 'Any soreness beyond normal training stiffness?',
+        holdIf: 'Anything localised, sharp, or lasting more than 48 hours.',
+      },
+      {
+        id: 'days-hit',
+        question: 'Were all six planned running days completed?',
+        holdIf:
+          'Two or more missed. A week short of its day count did not deliver its load, ' +
+          'so the next step up is measured from what happened rather than what was planned.',
+      },
+      {
+        id: 'acute-chronic-trend',
+        question: "Which way is Garmin's acute:chronic ratio moving?",
+        holdIf:
+          'Rising steeply. Treat as a TREND SIGNAL, never a threshold rule: the ' +
+          'acute:chronic ratio has been statistically dismantled as a predictor ' +
+          '(Lolli 2019 on mathematical coupling; Impellizzeri 2020, where an ' +
+          'acute-to-RANDOM ratio predicted injury as well as acute-to-chronic). ' +
+          'It is useful as a direction of travel and worthless as a line to cross.',
+      },
+    ],
+    /** Baseline for the trend above: MEASURED_BASE.garmin.acuteChronicRatio on 2026-09-06. */
+    ratioAtAuthoring: 1.0,
+  },
+] as const;

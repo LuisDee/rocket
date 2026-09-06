@@ -16,7 +16,7 @@ The MCP tools are the real product API; the PWA is a viewer. Tool responses are 
 
 **adjust_session(session_id, changes)** → targeted single-session edit (move slot, change distance, swap type). Guardrail-checked.
 
-**set_availability(rules|overrides)** → work pattern, commute, swim evenings, one-off exceptions.
+**set_availability(rules|overrides)** → work pattern, commute, the weekly swim slot, one-off exceptions.
 
 **get_calendar(from, to)** → merged view: sessions + races + work/commute + markers. Feeds the PWA too.
 

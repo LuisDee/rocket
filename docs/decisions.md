@@ -499,3 +499,109 @@ unexpected field survives, so a future capture with new keys fails loudly rather
 than leaking quietly. This is replaced wholesale when the sync lands.
 
 **Status:** PROVISIONAL pending the scheduled Garmin sync
+
+## 2026-09-06 -- the aggressive volume block: 60 / 80 / 100 / 80 / 60
+
+**Context:** the macro layer re-derived earlier today peaked at 58 km, built
+from an eleven-week Garmin window averaging ~30 km. Luis rejected it twice, and
+the second time with reasoning that checked out: "just because I historically
+run less I MUST have high weekly mileage... WE NEED THE VOLUME if we get it in
+early we can taper right down."
+
+**Decision:** 20 (race taper) / 60 / 80 / 100 / 80 / 60, peaking at 100 km in
+the week of 28 September with the 35 km long run in the same week, leaving three
+taper weeks into the marathon.
+
+**Alternatives rejected:** the 35/45/52/58 block, on the grounds above. An
+intermediate 42/58/75 proposal, same grounds. Peaking at 100 in the week of
+5 October -- rejected because it leaves only two taper weeks, and Luis's own
+framing was to get the volume in early and taper right down. Also rejected:
+holding the 15 % cap and marking every week an exemption.
+
+**Consequences:** deeper history pulled through the rate-limit guard supports
+the decision more than the recent window did -- 45.8, 48.0 and 57.1 km weeks in
+April and May, the last carrying a 42.7 km long run. Luis further stipulates he
+has run 60 km weeks comfortably and that some history never reached Garmin;
+recorded as `MEASURED_BASE.stipulatedComfortableWeekKm` and treated as given.
+
+The honest cost, recorded because a breach must be named rather than absorbed:
+100 km is roughly 75 % above anything recorded, reached in three weeks, in a new
+shoe. The destination is not the hazard, the slope is. Three mitigations carry
+the weight and are encoded rather than advised: `minRunDaysAtHighVolume` (a
+100 km week over five days is 20 km a day; over seven it is 14), keeping nearly
+all of it easy, and the week-2 check-in gate.
+
+**Status:** ACTIVE
+
+## 2026-09-06 -- ramp cap raised to 35 % in an explicit aggressive mode
+
+**Context:** the block above breaches the 15 % ramp cap every single week.
+
+**Decision:** `GUARDRAILS.aggressiveRampCapPct` = 35, with `rampMode` recording
+which is in force and `ACTIVE_RAMP_CAP_PCT` as the single value everything
+reads. The 15 % standard cap is retained, not deleted.
+
+**Alternatives rejected:** leaving the cap at 15 % and marking all five weeks as
+exemptions. A guardrail overridden every week is repealed in practice, and worse
+than absent: it trains the athlete to click through the one warning that
+eventually matters. Also rejected: removing the cap, which would have left
+nothing to catch a genuine spike.
+
+**Consequences:** under 35 % exactly one step breaches -- the 20 to 60 return
+from the race taper, +72.4 % on the pre-taper base. That is the step that
+deserves scrutiny, and it now gets it alone rather than in a crowd of five. It
+exceeds the returning-from-rest allowance too, so it stands on Luis's explicit
+ratification and nothing else; the test asserts the exemption says RATIFIED.
+The 80 (+33 %) and 100 (+25 %) steps sit inside the cap.
+
+**Status:** ACTIVE
+
+## 2026-09-06 -- swim frequency corrected: one session a week, not five evenings
+
+**Context:** the spec pack stated swimming five evenings a week plus a lesson,
+in `01-domain-model.md`, `03-planner.md`, `04-mcp-surface.md` and
+`06-training-block.md`. It is one two-hour session per week. There is also no
+cycling at all.
+
+**Decision:** corrected in all four specs and recorded as `AVAILABILITY` in
+`config/training.ts`. Cycling is not modelled for availability or load; the term
+survives only in the generated Garmin field catalogue, which records Garmin's
+field names rather than our model and was left alone.
+
+**Alternatives rejected:** treating it as a documentation tidy for a later pass.
+It is load-bearing for the volume block committed in the same change, so it
+belongs in the same commit.
+
+**Consequences:** the earlier feasibility arithmetic concluded weekday running
+was confined to early mornings because five evenings were taken. With four of
+those evenings free, evening runs and AM/PM doubles are available -- the
+difference between a 100 km week meaning a 05:30 alarm every weekday and being
+comfortably spread. **The volume plan is more feasible than the availability
+model implied, not less.** `minRunDaysAtHighVolume` is realistic on this
+schedule rather than aspirational.
+
+**Status:** ACTIVE
+
+## 2026-09-06 -- the first per-day session layer
+
+**Context:** `config/training.ts` held weekly totals and long runs only. That
+gap was already identified as the thing stopping the app being worth opening
+daily, and it matters more now: the sharpest risk in this block is not the
+100 km week but the 60 km week starting two days after a raced half.
+
+**Decision:** `BLOCK_WEEKS[].days` carries `DayPlan` entries. Week 2 is
+populated (6/8/10/10/6/20/rest); every other week carries `days: null` until
+authored.
+
+**Alternatives rejected:** authoring all seven weeks now. Weeks 3 onward depend
+on the week-2 check-in gate, so authoring them would be inventing detail the
+gate exists to decide.
+
+**Consequences:** a weekly total cannot express "rest instead if the half left
+anything sore" or "short shakeout before the long run", and those are the
+instructions that make the week safe. Tests assert the days sum to the weekly
+target, that the running-day count matches `minRunDays`, and that the day marked
+`long` matches `longRunKm` -- so the layer cannot silently drift from the total
+above it.
+
+**Status:** ACTIVE

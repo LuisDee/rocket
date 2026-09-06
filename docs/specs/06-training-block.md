@@ -14,7 +14,7 @@ Goal: Battersea Park Marathon, 2026-10-24, as fast as possible.
 ## Athlete baseline (2026-08-10)
 - Recent weekly volume ~30km (relaxed, out of a previous block). Longest recent: 33km trail/600m on 2026-08-09 → severe DOMS (eccentric downhill load + new Peregrines + uneven surface; three novel stressors). Prior week: 30km road @5:00/km in carbons, felt easy.
 - Implied goal band ~3:25–3:35; **provisional until Lincoln Half (rehearsal) confirms**. Planner derives MP from Lincoln, not from guesses.
-- Rarely injured historically. Swim: learning front crawl, target 5 evenings/wk + weekly Immerse lesson (provisionally Fri post-work — confirm feasibility vs 18/19:00 finish).
+- Rarely injured historically. Swim: learning front crawl, one 2-hour session per week. No cycling.
 
 ## Phase plan (macro layer seed)
 | Wk | Dates (Mon) | Phase | Run km target | Notes |
@@ -34,7 +34,7 @@ Goal: Battersea Park Marathon, 2026-10-24, as fast as possible.
 Ramp exceeds the +15% cap on paper at wk2→3 only because wk1 is a recovery reset; guardrail uses pre-rest baseline (30) → 40 is within tolerance for a returning-from-rest week. All later steps ≤ ~+10%.
 
 ## Standing weekly shape (build phase)
-Mon easy (run-commute if enabled) · Tue quality · Wed easy + swim · Thu easy/steady · Fri swim lesson (rest from running) · Sat long (carbons if ≥28km) · Sun recovery/swim. Exact placement is the micro-planner's job against availability.
+SUPERSEDED — the live shape is `config/training.ts` `BLOCK_WEEKS[].days`. Swimming is one 2-hour session a week, not three, so the standing shape is six running days with the swim placed on an easy day. Exact placement is the micro-planner's job against availability.
 
 ## Shoe policy
 Carbons: races + long runs ≥28km. Road daily trainer (**bought 2026-09-06**): all other road mileage. Peregrine 16: trail only, distance-capped until adapted.
