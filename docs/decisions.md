@@ -337,3 +337,113 @@ the evidence that says whether a second computed component earns its place.
 
 **Status:** ACTIVE. The deferral is PROVISIONAL pending that divergence
 evidence; it is a deferral with a trigger, not a silent scope cut.
+
+## 2026-09-06 -- macro layer re-derived from measured Garmin history
+
+**Context:** the seed block in `config/training.ts` was authored against a
+2026-08-10 start and a training history that did not happen. Garmin was
+bootstrapped on 2026-09-06 and the real weekly volumes are: 22 Jun 21.3,
+29 Jun 38.4, 6 Jul 25.1, 13 Jul 42.3, 20 Jul 24.2, 27 Jul 39.7, 3 Aug 39.5,
+10 Aug 27.2, 17 Aug 34.8, 24 Aug 0 (holiday), 31 Aug 14.8 km. Longest run
+31.5 km on 2026-08-09. Garmin's own load model reads acute 296, chronic 287,
+ratio 1.00, training readiness 63.
+
+**Decision:** `SEED_WEEKS` is replaced by `BLOCK_WEEKS`, re-derived from that
+history. The block starts 2026-09-07 with a taper into the Battersea Park Half
+(Sat 12 Sep), then four build weeks (35 / 45 / 52 / 58 km) and two taper weeks
+(38 km, then race week). Long runs 22 / 26 / 32 / 24 km, the longest on Sun
+4 Oct, 20 days out, with a deliberate cut-back the Sunday after.
+`PRE_BLOCK_BASELINE_KM` (a guessed 30) is replaced by `MEASURED_BASE`, which
+carries the observed weekly series, a 34.8 km pre-taper baseline, and Garmin's
+load figures as an independent cross-check.
+
+**Alternatives rejected:** keeping the seed block -- its dates are wrong and
+its 65 km peak is unreachable inside the ramp cap from here. Also rejected:
+demoting or abandoning the goal race, which an earlier revision of the plan
+raised as an option on the mistaken basis that the block had collapsed.
+
+**Consequences:** only **four long runs** fit before the taper, against the six
+to eight a normal marathon block carries. That, not weekly volume and not
+aerobic fitness, is the constraint that sets race day -- long-run durability is
+what the closing 10 km is made of. Three week-over-week steps exceed
+`GUARDRAILS.rampCapPct`; they are recorded as explicit `rampExemption` strings
+on the weeks concerned rather than absorbed by raising the cap, and two of the
+three are marked UNRATIFIED pending Luis's explicit override.
+
+**Status:** ACTIVE
+
+## 2026-09-06 -- correction: the block had not collapsed
+
+**Context:** an earlier revision of PLAN-2026-001 stated that weeks 3 and 4
+delivered "one 4.83 km run and a treadmill session against 45 and 50 km
+targets", described this as roughly 5 km/week against 95 km planned, and
+offered demoting the goal race as a serious option.
+
+**Decision:** that framing was wrong and is withdrawn. It was derived from a
+truncated view of the recent-activities list. The full series shows ten weeks
+averaging about 30 km with a 42.3 km peak, one blank week and one light one --
+an interruption, not a collapse. Garmin's acute:chronic ratio of 1.00 says the
+same thing independently: neither detrained nor overreached.
+
+**Alternatives rejected:** quietly re-deriving the plan without recording the
+error. `AGENTS.md` section 5 requires negative results to be written down;
+a wrong conclusion that drove a serious recommendation qualifies.
+
+**Consequences:** the goal race stands. The lesson is procedural and worth
+keeping: a truncated list read as a complete one produced a confident
+recommendation to abandon a race. Aggregate from the full series before
+drawing a conclusion about a trend.
+
+**Status:** ACTIVE
+
+## 2026-09-06 -- pace estimates are provisional pending the 12 Sep half
+
+**Context:** Garmin predicts a 1:38:12 half and a 3:35:40 marathon. Luis's own
+assessment is that 1:38 is too ambitious: he would love 1:40 and thinks 1:45 is
+realistic.
+
+**Decision:** record all three in `PACE_ESTIMATES` and lock none of them.
+Garmin's implied half-to-marathon ratio is 12940/5892 = 2.196, a Riegel-style
+exponent of about 1.135 and more conservative than the classic 1.06. Applied to
+the athlete's own numbers a 1:45 half implies about 3:50:35 and a 1:40 about
+3:39:36; with only four long runs banked the back half degrades more than any
+formula predicts, so the honest planning band off a 1:45 half is 3:50-4:00.
+
+**Alternatives rejected:** adopting Garmin's 3:35:40, which the athlete does not
+believe and which no rehearsal supports. Also rejected: picking a goal pace now
+-- `docs/specs/06-training-block.md` already requires marathon pace to be
+derived from a rehearsal result rather than guessed, and Saturday's half is that
+rehearsal, on the goal-race course, six days away.
+
+**Consequences:** every pace-dependent session is unspecified until 12 Sep.
+That is correct rather than inconvenient: a maximal effort on the actual course
+settles empirically in six days what a formula would only estimate.
+
+**Status:** PROVISIONAL pending the Battersea Park Half result, 2026-09-12
+
+## 2026-09-06 -- daily trainer bought; shoe inventory recorded
+
+**Context:** `docs/specs/07-wiring-todo.md` carried "buy road daily trainer" as
+an open task on Luis. The ramp to 45-58 km weeks was explicitly conditioned on
+it: running that volume in carbons or in trail shoes was a named injury risk.
+
+**Decision:** the trainer is bought and in use; carbons are ready for the
+Battersea Half on 12 Sep as well as the marathon. The inventory is now typed
+data in `config/training.ts` `SHOES.inventory` -- daily trainer for everyday
+road mileage, carbons for races and long runs at or above
+`carbonMinDistanceKm`, Peregrine 16 for trail only and still capped at
+`trailAdaptationCapKm` until adapted.
+
+**Alternatives rejected:** recording only the thresholds and leaving the
+inventory implicit. The foundation should carry the inventory even though
+nothing reads it yet, per the standing scope rule that the MVP accommodates all
+data rather than the minimum v1 consumes.
+
+**Consequences:** the ramp's stated prerequisite is met and that injury risk is
+retired. But the trainer is **new**, so its first uses carry the
+`MULTIPLIERS.shoeNovelty` penalty, and a new shoe during a volume ramp is two
+novel stressors at once. The 2026-08-09 run that wrecked him stacked three:
+new Peregrines, trail surface, 600 m of descent. `SHOES.inventory[].isNew`
+exists so the load model can charge that novelty rather than discover it.
+
+**Status:** ACTIVE

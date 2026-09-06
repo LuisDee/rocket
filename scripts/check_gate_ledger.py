@@ -39,7 +39,10 @@ STATUS_NEEDS_MECHANISM = ("IMPLEMENTED",)
 STATUS_NEEDS_REASON = ("NOT IMPLEMENTED", "REJECTED", "DISABLED")
 KNOWN_STATUSES = STATUS_NEEDS_REASON + STATUS_NEEDS_MECHANISM
 
-ENFORCED_BY = re.compile(r"Enforced by:\s*([^|]+?)(?:\.|$)", re.MULTILINE)
+# End the ref at a sentence break (". ") or end of cell, not at any period:
+# cutting at the first period made every dotted filename uncitable --
+# "garmin_guard.py" parsed as "garmin_guard" and failed to resolve.
+ENFORCED_BY = re.compile(r"Enforced by:\s*([^|]+?)(?:\.\s|\.$|$)", re.MULTILINE)
 REASON = re.compile(r"Reason:\s*\S+")
 HOOK_ID = re.compile(r"^\s*-\s*id:\s*(\S+)", re.MULTILINE)
 

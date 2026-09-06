@@ -1,6 +1,15 @@
 # 06 — The Battersea block (seed data / business fixture)
 
-Goal: Battersea Park Marathon, 2026-10-24, as fast as possible. ~10.5 weeks from 2026-08-10.
+Goal: Battersea Park Marathon, 2026-10-24, as fast as possible.
+
+> **SUPERSEDED 2026-09-06 as to dates and volumes.** The block below was
+> authored against a 2026-08-10 start and a training history that did not
+> happen -- a holiday interrupted weeks commencing 24 and 31 Aug. The live
+> macro layer is `config/training.ts` `BLOCK_WEEKS`, re-derived from measured
+> Garmin history: a 2026-09-07 start, 48 days to race day, a tune-up half on
+> 2026-09-12, four build weeks and two taper weeks. The *intent* below still
+> holds -- phases, guardrails, shoe policy, and deriving marathon pace from a
+> rehearsal result rather than guessing it. See docs/decisions.md 2026-09-06.
 
 ## Athlete baseline (2026-08-10)
 - Recent weekly volume ~30km (relaxed, out of a previous block). Longest recent: 33km trail/600m on 2026-08-09 → severe DOMS (eccentric downhill load + new Peregrines + uneven surface; three novel stressors). Prior week: 30km road @5:00/km in carbons, felt easy.
@@ -28,4 +37,4 @@ Ramp exceeds the +15% cap on paper at wk2→3 only because wk1 is a recovery res
 Mon easy (run-commute if enabled) · Tue quality · Wed easy + swim · Thu easy/steady · Fri swim lesson (rest from running) · Sat long (carbons if ≥28km) · Sun recovery/swim. Exact placement is the micro-planner's job against availability.
 
 ## Shoe policy
-Carbons: races + long runs ≥28km. Road daily trainer (**to buy** — e.g. Saucony Ride/Triumph): all other road mileage. Peregrine 16: trail only, distance-capped until adapted.
+Carbons: races + long runs ≥28km. Road daily trainer (**bought 2026-09-06**): all other road mileage. Peregrine 16: trail only, distance-capped until adapted.

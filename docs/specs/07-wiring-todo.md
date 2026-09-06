@@ -25,7 +25,7 @@
       contact balance needs one on every device ever made).
 - [ ] Decide run-commute participation (full ~15km / partial / no) — gates M1 volume placement.
 - [ ] Confirm or move Friday Immerse lesson slot vs 18/19:00 work finish.
-- [ ] Buy road daily trainer (Ride/Triumph class); log shoe inventory.
+- [x] Buy road daily trainer (Ride/Triumph class); log shoe inventory. **Done 2026-09-06** -- trainer bought and in use, carbons ready for the Battersea Half on 12 Sep. Inventory recorded in `config/training.ts` `SHOES.inventory`. This was a prerequisite for the volume ramp: 45-58 km weeks on carbons or trail shoes was a named injury risk, now retired. Note the trainer is NEW, so its early runs carry the novelty multiplier.
 - [ ] routr: expose its MCP endpoint to this server; document its tool contract.
 - [ ] DoHardThings: confirm attendee email used for "going" matching.
 - [ ] (Deferred) Strava OAuth only when routr publishing needs it.

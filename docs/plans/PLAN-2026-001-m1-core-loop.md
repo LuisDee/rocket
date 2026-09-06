@@ -3,7 +3,7 @@
 **Spec**: `docs/specs/00-overview.md` … `07-wiring-todo.md` (the seeded spec pack — no `SPEC-YYYY-NNN` file exists; the pack is the source of truth and this plan consumes it rather than re-deriving it).
 **Status**: DRAFT — awaiting approval before any implementation.
 **Branch/worktree**: `.worktrees/m1-core-loop` on `feat/m1-core-loop`. Main stays on `main`.
-**Clock**: written 2026-08-16, Garmin sections revised 2026-08-18. Race is 2026-10-24, **67 days out**. Two hard deadlines sit inside that: **~28 Sep**, load model warm and trusted before race-prep week 8, because taper decisions are the block's highest-stakes calls; and **4 Oct, Lincoln Half**, which locks goal marathon pace — the system must be able to ingest that result and re-derive MP from it by then. Together they are what make the Stage 3b backfill urgent.
+**Clock**: written 2026-08-16, Garmin sections revised 2026-08-18, macro layer re-derived 2026-09-06. Race is 2026-10-24, **48 days out**. The block now runs from 2026-09-07: a taper week into the **Battersea Park Half on Sat 12 Sep** (same park as the goal race, so it doubles as a course rehearsal AND is what settles goal marathon pace -- it replaces Lincoln in that role, three weeks earlier), then four build weeks, then two taper weeks. Only **four long runs** fit before the taper against the six to eight a normal block carries, which is the binding constraint on race day and what makes the Stage 3b backfill urgent.
 
 ---
 
@@ -496,7 +496,7 @@ soreness — is deferred to Stage 9 and expressed here in terms of the check-in 
 
 **Approach**:
 
-- **The macro layer is already authored.** `config/training.ts` `SEED_WEEKS` is typed, tested data covering all
+- **The macro layer is already authored.** `config/training.ts` `BLOCK_WEEKS` is typed, tested data covering all
   11 weeks with phases and km targets, guarded by `config/training.test.ts`. Seeding is an insert, not an
   authoring job — read it, do not re-derive it.
 - Availability is **fully data-driven** — no slot shape baked in (Luis's design instruction). Run-commute slots exist as a capability the model supports and the data does not currently enable.
@@ -626,7 +626,7 @@ it('does not change the run verdict when only swim load rose', ...);  // the swi
 1. `npm run typecheck && lint && format:check && test` green — log path.
 2. Integration suite against real Postgres green, with the `globalSetup` throw armed — log path.
 3. Guards: `check_gate_ledger.py`, `test_guards.py` — output.
-4. Seed loads the 11 macro weeks and 4 races **from `config/training.ts` `SEED_WEEKS`** — an insert, not an authoring job; a second run is idempotent.
+4. Seed loads the 11 macro weeks and 4 races **from `config/training.ts` `BLOCK_WEEKS`** — an insert, not an authoring job; a second run is idempotent.
 5. Backfill the real July–August activity history; CTL reports `warmingUp` — screenshot.
 6. Phone: add the connector, `get_status`, log a run, check in — screenshots.
 7. Loop A and Loop B driven from the phone in natural language — transcript.
@@ -742,7 +742,7 @@ session-level tool.
 - [ ] **S3b**: bulk export parsed (read `GarminDB`'s parser first) · provenance columns · staging-table-then-promote · idempotency + gap-count tests · chronic-load seed extracted
 - [ ] **S4**: `/api/mcp` route · 3 tools · `ok`/`fail`/`reason` · both well-known docs · `npm ls zod` gate · client-driven contract tests · Claude Code manual check · security review
 - [ ] **S5**: OAuth routes · owner allowlist · `typ` separation · CIMD + DCR · port-agnostic loopback · principal threading · PKCE flow tests · **phone connector check** · security review
-- [ ] **S6**: macro seed read from `SEED_WEEKS` · micro placement · guardrails (distance + schedule + check-in only) · week-6 feasibility test
+- [ ] **S6**: macro seed read from `BLOCK_WEEKS` · micro placement · guardrails (distance + schedule + check-in only) · week-6 feasibility test
 - [ ] **S7**: replan diffs + rationale · Loops A and B through `tools/call` · remaining tools
 - [ ] **S8**: TRIMP + pace tiers · MSK joules · descent-only-on-pace-tier · trail-vs-road regression pair
 - [ ] **S9**: ATL/CTL/TSB calendar-day recurrence · **warm-start CTL from a seed** · readiness renormalisation · `warmingUp` · Garmin oracle stored alongside and reconciled

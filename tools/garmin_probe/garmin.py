@@ -39,9 +39,15 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
+from garmin_guard import GarminGuard, RateLimitGuard, _is_429
+
 HERE = Path(__file__).parent
 OUT = HERE / "out"
 DEFAULT_TOKEN = OUT / "token.json"
+
+# One guard instance per process. The state that matters lives in the sqlite
+# ledger, not here, so this is a handle rather than a cache.
+GUARD = GarminGuard()
 
 
 # --------------------------------------------------------------------------- creds
@@ -165,8 +171,21 @@ def bootstrap(args: argparse.Namespace) -> int:
         retry_attempts=1,
     )
 
+    # One reservation covers the whole credential flow including the MFA resume:
+    # it is a single login as far as Garmin is concerned, and charging it twice
+    # would exhaust a 2/day budget on one successful bootstrap.
     try:
-        status, state = api.login()
+        with GUARD.call("login", "bootstrap"):
+            status, state = api.login()
+            if status == "needs_mfa":
+                print("MFA required.")
+                api.resume_login(state, mfa())
+                print("MFA accepted.")
+            else:
+                print("Logged in without MFA.")
+    except RateLimitGuard as exc:
+        print(f"REFUSED BY GUARD: {exc}", file=sys.stderr)
+        return 2
     except Exception as exc:  # noqa: BLE001 - we deliberately do not classify further
         print(f"LOGIN FAILED: {type(exc).__name__}: {exc}", file=sys.stderr)
         print(
@@ -174,17 +193,6 @@ def bootstrap(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-
-    if status == "needs_mfa":
-        print("MFA required.")
-        try:
-            api.resume_login(state, mfa())
-        except Exception as exc:  # noqa: BLE001
-            print(f"MFA RESUME FAILED: {type(exc).__name__}: {exc}", file=sys.stderr)
-            return 1
-        print("MFA accepted.")
-    else:
-        print("Logged in without MFA.")
 
     save_token(api.client, args.token_file)
     print(f"token written: {args.token_file} (0600)")
@@ -196,8 +204,35 @@ def connect(token_file: Path) -> Any:
     """Return an authenticated client from a stored token, refreshing if needed."""
     from garminconnect import Garmin
 
-    api = Garmin(retry_attempts=1)
-    api.login(tokenstore=load_token(token_file))
+    # retry_attempts=0: verified in the library's own `_is_retryable`, retries only
+    # ever covered 5xx and network errors -- 429 and auth errors are excluded and
+    # fail fast already. So 0 buys nothing against a 429, and removes three
+    # automatic re-requests during a Garmin outage, which is when hammering is
+    # least welcome.
+    api = Garmin(retry_attempts=0)
+
+    # THE IMPORTANT LINE. Garmin.login() has a self-healing branch (__init__.py
+    # around 754-782) that, when cached tokens are rejected -- including by a
+    # transient 401 -- discards them and runs a full credential login: 5 auth
+    # strategies over 3-5 TLS impersonations and 4 DI client ids, tens of requests
+    # to Garmin's auth hosts, exactly the traffic that earns an account-keyed 429.
+    # Its guard condition is `tokens_loaded and username and password and not
+    # return_on_mfa`, so withholding credentials makes the branch unreachable and
+    # a rejected token raises instead. That is already true here by construction;
+    # this assert makes it deliberate and load-bearing rather than incidental.
+    assert api.username is None and api.password is None, (
+        "token path must never hold credentials: they re-enable the library's "
+        "credential cascade on any auth failure"
+    )
+
+    # Data bucket, not login. This loads a stored token and at most refreshes it
+    # against diauth; it cannot become a credential cascade because the assert
+    # above guarantees there are no credentials to cascade with. Charging it to
+    # the login bucket would spend a 2/day budget on ordinary reads and make a
+    # second probe in one day impossible.
+    with GUARD.call("data", "token-login", wait_s=5.0):
+        api.login(tokenstore=load_token(token_file))
+
     # The library refreshes in the background but never writes an inline token back,
     # so we re-persist unconditionally. Cheap, and the alternative is a silent
     # degradation to credential login.
@@ -221,6 +256,40 @@ def shape(value: Any, depth: int = 0) -> Any:
     if value is None:
         return "null"
     return type(value).__name__
+
+
+def run_call(name: str, fn: Callable[[], Any], results: dict[str, dict[str, Any]]) -> bool:
+    """Run one guarded endpoint call. Returns False when the sweep must stop.
+
+    An ordinary endpoint failure is recorded and the sweep continues -- a single
+    404 says nothing about the others. A 429 is different in kind: it means the
+    limiter is actively pushing back, so continuing into the remaining endpoints
+    is the precise behaviour that turns a soft limit into a lockout. The guard's
+    context manager trips the breaker on the way out, so abort and cooldown are
+    one move.
+    """
+    try:
+        with GUARD.call("data", name, wait_s=30.0):
+            payload = fn()
+    except RateLimitGuard as exc:
+        results[name] = {"ok": False, "error": f"refused by guard: {exc}"}
+        print(f"  {name}: REFUSED BY GUARD -- {exc}", file=sys.stderr)
+        return False
+    except Exception as exc:  # noqa: BLE001 - classify, then decide
+        results[name] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        if _is_429(exc):
+            print(
+                f"  {name}: 429 -- ABORTING SWEEP. Breaker tripped; wait it out.",
+                file=sys.stderr,
+            )
+            return False
+        print(f"  {name}: ERROR {type(exc).__name__}")
+        return True
+    blob = json.dumps(payload, indent=2, default=str)
+    (OUT / f"{name}.json").write_text(blob, encoding="utf-8")
+    results[name] = {"ok": True, "bytes": len(blob), "shape": shape(payload)}
+    print(f"  {name}: {len(blob):,} bytes")
+    return True
 
 
 def probe(args: argparse.Namespace) -> int:
@@ -270,17 +339,17 @@ def probe(args: argparse.Namespace) -> int:
     ]
 
     results: dict[str, dict[str, Any]] = {}
+
+    def abort() -> int:
+        """Persist what we learned before stopping. A sweep cut short still tells
+        us which endpoints answered, and the token may have rotated."""
+        save_token(api.client, args.token_file)
+        write_catalogue(results, HERE / "CATALOGUE.md")
+        return 2
+
     for name, fn in calls:
-        try:
-            payload = fn()
-        except Exception as exc:  # noqa: BLE001 - a failing endpoint must not stop the sweep
-            results[name] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-            print(f"  {name}: ERROR {type(exc).__name__}")
-            continue
-        blob = json.dumps(payload, indent=2, default=str)
-        (OUT / f"{name}.json").write_text(blob, encoding="utf-8")
-        results[name] = {"ok": True, "bytes": len(blob), "shape": shape(payload)}
-        print(f"  {name}: {len(blob):,} bytes")
+        if not run_call(name, fn, results):
+            return abort()
 
     # The richest single object: one activity with its streams. Done last because it is
     # the largest response and depends on the activity list having succeeded.
@@ -298,17 +367,12 @@ def probe(args: argparse.Namespace) -> int:
                 ("activity_weather", lambda: api.get_activity_weather(aid)),
                 ("activity_gear", lambda: api.get_activity_gear(aid)),
             ]:
-                try:
-                    payload = fn()
-                except Exception as exc:  # noqa: BLE001
-                    results[name] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-                    print(f"  {name}: ERROR {type(exc).__name__}")
-                    continue
-                blob = json.dumps(payload, indent=2, default=str)
-                (OUT / f"{name}.json").write_text(blob, encoding="utf-8")
-                results[name] = {"ok": True, "bytes": len(blob), "shape": shape(payload)}
-                print(f"  {name}: {len(blob):,} bytes")
+                if not run_call(name, fn, results):
+                    return abort()
 
+    # The session refreshes in the background during a sweep this long, and the
+    # rotated refresh token exists only in memory until we write it.
+    save_token(api.client, args.token_file)
     write_catalogue(results, HERE / "CATALOGUE.md")
     ok = sum(1 for r in results.values() if r.get("ok"))
     print(f"\n{ok}/{len(results)} endpoints returned data")
@@ -352,8 +416,27 @@ def write_catalogue(results: dict[str, dict[str, Any]], path: Path) -> None:
 # --------------------------------------------------------------------------- cli
 
 
+def guard_status(args: argparse.Namespace) -> int:  # noqa: ARG001
+    """Print budget and breaker state. Makes no network call, by design: the whole
+    point is answering "can I run this yet" without spending anything to find out."""
+    blocked = False
+    for bucket in ("login", "data"):
+        s = GUARD.status(bucket)
+        wait = float(s["blocked_for_s"])
+        blocked = blocked or wait > 0
+        state = f"BLOCKED for {wait / 3600:.1f}h ({s['reason']})" if wait else "open"
+        since = float(s["seconds_since_last"])
+        print(
+            f"{bucket:6} {state}\n"
+            f"       used {s['used_last_minute']}/min, {s['used_last_day']}/day, "
+            f"{s['remaining_today']} left today; "
+            f"last call {'never' if since == float('inf') else f'{since:.0f}s ago'}"
+        )
+    return 1 if blocked else 0
+
+
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    p = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
     p.add_argument(
         "--token-file", type=Path, default=DEFAULT_TOKEN, help="where the token lives"
     )
@@ -362,8 +445,9 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("bootstrap", help="one-time login, writes the token")
     sub.add_parser("probe", help="enumerate every endpoint and write the catalogue")
+    sub.add_parser("status", help="show rate-limit budget and breaker state")
     args = p.parse_args(argv)
-    return {"bootstrap": bootstrap, "probe": probe}[args.cmd](args)
+    return {"bootstrap": bootstrap, "probe": probe, "status": guard_status}[args.cmd](args)
 
 
 if __name__ == "__main__":
