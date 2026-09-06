@@ -221,3 +221,76 @@ surface terms, which exist because a 33 km/600 m trail run in new shoes scored
 like an easy flat 30 km and wrecked the athlete for a week.
 
 **Status:** PROVISIONAL pending M6 calibration
+
+## 2026-08-18 -- Fenix 8 confirmed; Garmin's own load and readiness become an oracle
+
+**Context:** `docs/specs/07-wiring-todo.md:12` carried "confirm watch model" as an
+open item because which wellness fields exist at all is model-gated. Readiness
+(`docs/specs/02-load-engine.md:22`) depends on HRV, resting HR, sleep and body
+battery.
+
+**Decision:** the watch is a Fenix 8. Top capability tier: HRV status with a
+personalised baseline band, Body Battery, sleep staging and sleep score, Training
+Readiness, Training Status, and native running dynamics (ground contact time,
+vertical oscillation, stride length, running power). No readiness input is
+hardware-blocked. Separately: store Garmin's own `dailyTrainingLoadAcute`,
+`dailyTrainingLoadChronic`, `dailyAcuteChronicWorkloadRatio` and Training
+Readiness score alongside our computed values rather than discarding them.
+
+**Alternatives rejected:** computing everything ourselves and ignoring Garmin's
+derived metrics. Rejected because they cost nothing to store and are the only
+independent check available on a load model whose two-component split has no
+published validation behind it. Disagreement between the two series is precisely
+the signal M6 calibration needs. Also rejected: adopting Garmin's Training
+Readiness as our readiness score -- it does not know about soreness, which
+`docs/specs/02-load-engine.md:21` makes the dominant term.
+
+**Consequences:** every overnight metric is now gated on behaviour rather than
+hardware -- the watch must be worn asleep, and HRV `status`/`baseline` stay null
+until roughly three weeks of consistent nights. Two questions no API can answer
+are now on Luis (worn asleep? for how long?), and if the answer is "only for
+runs" then readiness degrades to a resting-HR-and-subjective model and the spec
+must say so. Running dynamics are an _optional refinement_ to the musculoskeletal
+component, never its core term: ground contact _balance_ additionally requires a
+chest strap or pod on every device ever made.
+
+**Status:** ACTIVE
+
+## 2026-08-18 -- Garmin source decided by probe; the token consequence is superseded
+
+**Context:** the 2026-08-15 entry "Vercel plus Neon Postgres, with the Garmin job
+on Vercel too" concluded that the Garmin OAuth token must live in Postgres and be
+rehydrated per invocation, and that a test asserting the token is reused rather
+than re-minted would be mandatory when M3 lands. Research on 2026-08-18 changed
+the shape of the problem.
+
+**Decision:** the Garmin source is chosen by a 30-minute probe before any schema
+is designed, not by this entry. Branch A: a partner bridge (intervals.icu holds
+genuine Garmin partner OAuth and issues a self-serve personal API key) -- no
+OAuth token, no rotation, no MFA, activities arrive by webhook. Branch B: the
+`python-garminconnect` library direct on a scheduled runner, with the token as a
+row in Postgres. The probe decides by reading the actual wellness payload: if
+`hrv`, `restingHR`, `sleepScore` and `bodyBattery` are populated, take Branch A.
+
+**Alternatives rejected:** running the Python library inside a Vercel function,
+which the 2026-08-15 entry implied. Rejected because Vercel Hobby cron fires once
+a day, plus or minus 59 minutes, is never retried, and can be missed with no log
+produced -- shipping a 40 MB compiled C extension into a serverless bundle to get
+the worst available scheduler. Also rejected: the official Garmin Developer
+Program, which is documented business-use-only and whose request form has been a
+"System Maintenance" block since 2026-03-25 (verified live 2026-08-18).
+
+**Consequences:** this **supersedes the Garmin-token consequence** of the
+2026-08-15 entry; that entry's hosting decision stands unchanged. Under Branch A
+the mandatory token-reuse test is unnecessary because there is nothing to
+re-mint. Under Branch B it is necessary and sharper than previously understood:
+`Garmin.login()` accepts an inline JSON token string, but in that mode the
+library **never writes rotated tokens back** -- every `client.dump()` is gated on
+a filesystem path being set, while the refresh token does rotate. The caller must
+persist `client.dumps()` after every login or silently degrade to a credential
+login per run and trip the 429. Under either branch, retry loops against Garmin
+auth are forbidden: the 429 is keyed per-account, inescapable by changing IP or
+headers, and lasts 48-72+ hours with no recovery process.
+
+**Status:** ACTIVE. The probe result is PROVISIONAL pending Luis running it; the
+branch it selects should be recorded as a further entry.
