@@ -62,4 +62,10 @@ new `tools/garmin_probe/garmin_guard.py`, `tools/garmin_probe/test_garmin.py`,
 
 ## Commits
 
-- `68590c0` feat(garmin): make an account lockout structurally impossible
+- `758a2dc` -- this task's entire diff (guard, wiring, tests, ledger row,
+  parser fix) landed inside a concurrently-running agent's commit, which
+  staged with `git add -A` while these files were staged and unread. The
+  commit message describes macro-block work only; the code is correct and
+  gate-verified, but its provenance is wrong. Recorded rather than rebased:
+  rewriting a branch other agents are actively committing onto would risk
+  losing their work to fix a cosmetic attribution problem.
