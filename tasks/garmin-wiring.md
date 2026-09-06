@@ -57,4 +57,4 @@ No code, no schema, no config. `config/training.ts` is unchanged:
 
 ## Commits
 
-- `ad39735` docs: fold the Garmin research into the specs, plan and ledger
+- `7fa5558` docs: fold the Garmin research into the specs, plan and ledger
