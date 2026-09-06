@@ -46,3 +46,6 @@ next-env.d.ts
 # python guard bytecode
 __pycache__/
 *.pyc
+# python harness venvs and probe output (health data + live tokens)
+tools/**/.venv/
+tools/**/out/

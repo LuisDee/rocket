@@ -1,0 +1,17 @@
+[project]
+name = "rocket-garmin-probe"
+version = "0.1.0"
+description = "One-time Garmin Connect login and full-surface data probe for rocket."
+# garminconnect 0.3.10+ requires >=3.12 (verified against the wheel metadata, not assumed).
+# Vercel's Python runtime offers 3.12/3.13/3.14, so this floor is compatible with the
+# eventual production home.
+requires-python = ">=3.12"
+dependencies = [
+    # Floor and compatible-release ceiling, never an exact pin: Garmin has broken this
+    # client twice in 12 months and both fixes shipped as patch releases (16 days, then
+    # 3 days). An exact pin converts a 3-day upstream outage into an indefinite one.
+    "garminconnect>=0.3.10,<0.4",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]

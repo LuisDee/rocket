@@ -1,0 +1,3 @@
+# Raw probe output is personal health data and a live refresh token. Never committed.
+# CATALOGUE.md (field names and shapes, no values) is committed from the parent dir.
+out/

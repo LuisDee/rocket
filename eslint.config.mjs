@@ -45,6 +45,7 @@ const eslintConfig = defineConfig([
     'build/**',
     'next-env.d.ts',
     'scripts/**', // stdlib python guards, not TypeScript
+    'tools/**', // uv-managed python harnesses, not TypeScript
   ]),
 ]);
 

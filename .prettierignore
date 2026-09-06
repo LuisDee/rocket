@@ -3,3 +3,6 @@ node_modules
 package-lock.json
 public
 docs/specs
+
+# python harnesses (uv-managed; formatted by ruff conventions, not prettier)
+tools/
