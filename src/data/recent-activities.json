@@ -1,0 +1,242 @@
+[
+  {
+    "date": "2026-09-05",
+    "type": "treadmill_running",
+    "distanceKm": 10.0,
+    "movingSeconds": 2857,
+    "elapsedSeconds": 2954,
+    "name": "Treadmill Running"
+  },
+  {
+    "date": "2026-09-05",
+    "type": "hiking",
+    "distanceKm": 6.09,
+    "movingSeconds": 4370,
+    "elapsedSeconds": 7513,
+    "name": "High Peak Hiking"
+  },
+  {
+    "date": "2026-09-02",
+    "type": "running",
+    "distanceKm": 4.83,
+    "movingSeconds": 1482,
+    "elapsedSeconds": 1755,
+    "name": "S\u00f3ller Running"
+  },
+  {
+    "date": "2026-08-22",
+    "type": "running",
+    "distanceKm": 16.0,
+    "movingSeconds": 5018,
+    "elapsedSeconds": 5021,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-08-20",
+    "type": "running",
+    "distanceKm": 9.44,
+    "movingSeconds": 3544,
+    "elapsedSeconds": 3700,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-08-18",
+    "type": "running",
+    "distanceKm": 9.33,
+    "movingSeconds": 3508,
+    "elapsedSeconds": 3718,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-08-16",
+    "type": "running",
+    "distanceKm": 11.39,
+    "movingSeconds": 3304,
+    "elapsedSeconds": 3782,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-08-15",
+    "type": "treadmill_running",
+    "distanceKm": 5.75,
+    "movingSeconds": 2337,
+    "elapsedSeconds": 2567,
+    "name": "Treadmill Running"
+  },
+  {
+    "date": "2026-08-12",
+    "type": "running",
+    "distanceKm": 10.02,
+    "movingSeconds": 3078,
+    "elapsedSeconds": 3685,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-08-09",
+    "type": "running",
+    "distanceKm": 31.53,
+    "movingSeconds": 12013,
+    "elapsedSeconds": 13082,
+    "name": "Amber Valley Running"
+  },
+  {
+    "date": "2026-08-08",
+    "type": "running",
+    "distanceKm": 1.68,
+    "movingSeconds": 427,
+    "elapsedSeconds": 447,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-08-04",
+    "type": "running",
+    "distanceKm": 6.28,
+    "movingSeconds": 2134,
+    "elapsedSeconds": 2269,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-08-02",
+    "type": "running",
+    "distanceKm": 11.37,
+    "movingSeconds": 3484,
+    "elapsedSeconds": 4522,
+    "name": "Haringey Running"
+  },
+  {
+    "date": "2026-08-02",
+    "type": "running",
+    "distanceKm": 18.35,
+    "movingSeconds": 5542,
+    "elapsedSeconds": 6424,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-08-01",
+    "type": "running",
+    "distanceKm": 9.94,
+    "movingSeconds": 2970,
+    "elapsedSeconds": 2979,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-07-26",
+    "type": "running",
+    "distanceKm": 21.1,
+    "movingSeconds": 6198,
+    "elapsedSeconds": 7246,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-07-20",
+    "type": "running",
+    "distanceKm": 3.07,
+    "movingSeconds": 1186,
+    "elapsedSeconds": 1223,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-07-19",
+    "type": "running",
+    "distanceKm": 21.14,
+    "movingSeconds": 6384,
+    "elapsedSeconds": 6431,
+    "name": "Melton Running"
+  },
+  {
+    "date": "2026-07-14",
+    "type": "running",
+    "distanceKm": 21.18,
+    "movingSeconds": 6573,
+    "elapsedSeconds": 8975,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-07-12",
+    "type": "running",
+    "distanceKm": 10.04,
+    "movingSeconds": 2795,
+    "elapsedSeconds": 2879,
+    "name": "North Lincolnshire Running"
+  },
+  {
+    "date": "2026-07-11",
+    "type": "running",
+    "distanceKm": 3.69,
+    "movingSeconds": 824,
+    "elapsedSeconds": 1595,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-07-07",
+    "type": "running",
+    "distanceKm": 11.41,
+    "movingSeconds": 3104,
+    "elapsedSeconds": 3680,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-07-05",
+    "type": "running",
+    "distanceKm": 11.22,
+    "movingSeconds": 3149,
+    "elapsedSeconds": 4008,
+    "name": "Barnet Running"
+  },
+  {
+    "date": "2026-07-03",
+    "type": "hiking",
+    "distanceKm": 3.75,
+    "movingSeconds": 2800,
+    "elapsedSeconds": 10019,
+    "name": "Los Angeles County Hiking"
+  },
+  {
+    "date": "2026-07-02",
+    "type": "running",
+    "distanceKm": 14.82,
+    "movingSeconds": 4744,
+    "elapsedSeconds": 6289,
+    "name": "Los Angeles Running"
+  },
+  {
+    "date": "2026-07-02",
+    "type": "running",
+    "distanceKm": 6.61,
+    "movingSeconds": 1895,
+    "elapsedSeconds": 2720,
+    "name": "Los Angeles Running"
+  },
+  {
+    "date": "2026-07-01",
+    "type": "running",
+    "distanceKm": 5.71,
+    "movingSeconds": 2122,
+    "elapsedSeconds": 2155,
+    "name": "Santa Monica Running"
+  },
+  {
+    "date": "2026-06-28",
+    "type": "running",
+    "distanceKm": 10.31,
+    "movingSeconds": 3046,
+    "elapsedSeconds": 3634,
+    "name": "Palm Springs Running"
+  },
+  {
+    "date": "2026-06-27",
+    "type": "running",
+    "distanceKm": 5.57,
+    "movingSeconds": 1589,
+    "elapsedSeconds": 1639,
+    "name": "Palm Springs Running"
+  },
+  {
+    "date": "2026-06-24",
+    "type": "running",
+    "distanceKm": 5.44,
+    "movingSeconds": 1582,
+    "elapsedSeconds": 1791,
+    "name": "Barnet Running"
+  }
+]

@@ -447,3 +447,55 @@ new Peregrines, trail surface, 600 m of descent. `SHOES.inventory[].isNew`
 exists so the load model can charge that novelty rather than discover it.
 
 **Status:** ACTIVE
+
+## 2026-09-06 -- the home-screen app ships without a service worker
+
+**Context:** rocket needed a front end Luis could add to his iPhone home screen,
+ahead of any database work. The plan had assumed this meant porting
+DoHardThings' PWA machinery -- service worker, install journey, Serwist.
+
+**Decision:** a manifest, PNG icons and a page. No service worker, no offline
+support, no install-prompt UI.
+
+**Alternatives rejected:** porting `DoHardThings/components/pwa/` -- roughly
+26 KB of mock-Safari-chrome walkthrough that would add motion, lucide-react,
+sonner and @base-ui as dependencies. It exists to teach strangers on mixed
+devices to install a web app. Also rejected: `app/sw.ts` plus Serwist, which is
+wired through a webpack plugin while rocket's Next 16 uses Turbopack -- a
+rewrite rather than a copy.
+
+**Consequences:** iOS 26 removed installability requirements entirely -- Safari
+adds any page to the home screen -- so none of that machinery buys anything for
+one user on one phone. The page therefore has no offline story: no signal means
+an error page. That is the right trade for a view whose entire value is
+freshness. Web push, which genuinely does need a service worker, is deferred.
+
+Icons are PNG, not SVG. iOS silently ignores SVG for home-screen icons, which
+is why `~/dev/marathonApp`'s icon on his phone is a Safari screenshot rather
+than its intended art.
+
+**Status:** ACTIVE
+
+## 2026-09-06 -- recent runs ship as a committed snapshot, not a live read
+
+**Context:** the page shows what was actually run. The real capture at
+`tools/garmin_probe/out/activities_recent.json` is gitignored: it carries GPS
+polylines, per-zone heart-rate dwell times and running dynamics, and the repo
+is public.
+
+**Decision:** `tools/extract_activity_summary.py` derives a six-field summary
+(date, type, distance, moving and elapsed seconds, the athlete's own title) into
+`src/data/recent-activities.json`, which is committed. The page states plainly
+that it is a snapshot taken on 2026-09-06 and not a running sync.
+
+**Alternatives rejected:** reading the gitignored capture at request time --
+works locally, absent in a deployment, and would put personal health data into
+the build. Committing the raw capture -- publishes GPS traces that mostly start
+at his front door.
+
+**Consequences:** new runs do not appear until the summary is regenerated, which
+is why the page says so rather than implying freshness. The extractor asserts no
+unexpected field survives, so a future capture with new keys fails loudly rather
+than leaking quietly. This is replaced wholesale when the sync lands.
+
+**Status:** PROVISIONAL pending the scheduled Garmin sync
