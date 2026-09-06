@@ -18,7 +18,7 @@
 
 **CheckIn** — daily: RPE of yesterday, soreness (location + severity scale that separates *tired* from *tumble-dryer*), sleep quality, motivation, free-text note. 30 seconds max to complete.
 
-**AvailabilityRule** — recurring: work Mon–Fri 09:00–18:00/19:00, commute 45 min each side, swim evenings, Immerse lesson slot (provisionally Fri post-work — flagged risky given 18/19:00 finish; confirm or move). Plus one-off overrides ("in Leeds Thursday", "half day Friday").
+**AvailabilityRule** — recurring: weekday working hours, commute each side, swim evenings, swim-lesson slot (provisionally Fri post-work — flagged risky given 18/19:00 finish; confirm or move). Plus one-off overrides ("in Leeds Thursday", "half day Friday").
 
 **WellnessSnapshot** — per day from Garmin when sync is alive: HRV, resting HR, sleep, body battery. Nullable throughout; readiness must compute without it.
 

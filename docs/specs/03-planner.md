@@ -8,7 +8,7 @@
 - One long run per week (weekend default), one quality session max in build phase, never on consecutive days, never the day after a race or long run.
 - Swim sessions coexist with easy runs on the same day; never with quality + long combined.
 - Long runs and races: carbons. Daily mileage: road trainers. Trail sessions: Peregrines — and any *first* trail/elevation exposure gets a conservative distance cap (lesson learned 2026-08-09).
-- Run-commute slots (Colindale→City ~15km, or partial) are the preferred vehicle for easy volume **if enabled** in availability — biggest lever for fitting 60km around five swim evenings.
+- Run-commute slots (home→office, ~15km, or partial) are a supported vehicle for easy volume **if enabled** in availability. Currently disabled: not feasible without shower/changing facilities (ratified 2026-08-18).
 
 ## Replan triggers
 1. Daily check-in red/amber readiness.
