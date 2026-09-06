@@ -49,6 +49,11 @@ Readiness factors or Garmin's own acute/chronic pair. Recorded in `docs/decision
 - [x] Gitignore raw output; commit the catalogue only
 - [x] All gates green
 
+- [x] MFA reader waits for the code instead of checking once (the code only arrives
+      after the login fires, so a single check loses the race and burns the one attempt)
+- [x] Bootstrap run against the real account: MFA accepted, token persisted 0600
+- [x] Probe run: 40/40 endpoints, `CATALOGUE.md` generated (1,832 lines, no values)
+
 ## Commits
 
 - `cffd93b` feat(tools): harness that wires Garmin and Strava in

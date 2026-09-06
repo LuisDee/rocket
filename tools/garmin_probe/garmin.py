@@ -33,6 +33,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from collections.abc import Callable
 from datetime import date, timedelta
 from pathlib import Path
@@ -76,6 +77,10 @@ def read_credentials() -> tuple[str, str, str]:
     return email, password, "env"
 
 
+MFA_WAIT_SECONDS = 600
+MFA_POLL_SECONDS = 2
+
+
 def make_mfa_reader(mfa_file: Path | None, mfa_env: str) -> Callable[[], str]:
     """Build a zero-arg callable returning the MFA code.
 
@@ -85,18 +90,33 @@ def make_mfa_reader(mfa_file: Path | None, mfa_env: str) -> Callable[[], str]:
     """
 
     def read() -> str:
-        if mfa_file and mfa_file.is_file():
-            code = mfa_file.read_text(encoding="utf-8").strip()
+        # The code only arrives AFTER the login request fires, so a single check is a
+        # race we lose every time: it raises, the resume state is discarded, and the
+        # next run is a second hit on an endpoint whose 429 is keyed per-account and
+        # locks for 48-72h. Wait for the code instead of burning the attempt.
+        deadline = time.monotonic() + MFA_WAIT_SECONDS
+        announced = False
+        while time.monotonic() < deadline:
+            if mfa_file and mfa_file.is_file():
+                code = mfa_file.read_text(encoding="utf-8").strip()
+                if code:
+                    return code
+            code = os.environ.get(mfa_env, "").strip()
             if code:
                 return code
-        code = os.environ.get(mfa_env, "").strip()
-        if code:
-            return code
-        if sys.stdin.isatty():
-            return input("Garmin MFA code: ").strip()
+            if not announced:
+                print(
+                    f"Waiting up to {MFA_WAIT_SECONDS // 60} min for the MFA code -- "
+                    f"write it to {mfa_file or '(no --mfa-file given)'} "
+                    f"or set {mfa_env}.",
+                    flush=True,
+                )
+                announced = True
+            time.sleep(MFA_POLL_SECONDS)
         raise SystemExit(
-            f"MFA required but no code available.\n"
-            f"  Write it to {mfa_file} or set {mfa_env}, then re-run.\n"
+            f"MFA required but no code arrived within {MFA_WAIT_SECONDS}s.\n"
+            f"  The login state is now discarded. Re-running is a SECOND login "
+            f"attempt -- do so deliberately, not reflexively.\n"
         )
 
     return read
