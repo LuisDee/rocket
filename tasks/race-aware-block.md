@@ -46,13 +46,13 @@ structure changes and the 100 km target should come down; recorded as such.
 
 ## Checklist
 
-- [ ] `RACES` added with all four fixtures
-- [ ] Long-session dates on every week; weeks 4 and 5 reshaped onto the races
-- [ ] Regression test proving no session lands on a live race date
-- [ ] Specs corrected
-- [ ] Decision entry appended, including the DoHardThings attendance gap
-- [ ] Gates green, page renders
+- [x] `RACES` added with all four fixtures
+- [x] Long-session dates on every week; weeks 4 and 5 reshaped onto the races
+- [x] Regression test proving no session lands on a live race date
+- [x] Specs corrected
+- [x] Decision entry appended, including the DoHardThings attendance gap
+- [x] Gates green, page renders
 
 ## Commits
 
-(populated as work lands)
+- `b6ea990` fix(block): races become first-class data, peak fortnight reshaped around them
