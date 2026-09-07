@@ -1168,3 +1168,30 @@ it), not a tuning knob, so it is ACTIVE rather than PROVISIONAL even though the
 percentage beside it is provisional.
 
 **Status:** ACTIVE
+
+---
+
+## 2026-09-07 -- week 4 asks for more running days than the recovery guardrail allows
+
+**Context:** found by the planner, not by a reader. `BLOCK_WEEKS` week 4 (the
+100 km peak) carries `minRunDays: 7`, and `GUARDRAILS.minRestOrSwimOnlyDaysPerWeek`
+is 1. Seven running days leaves no rest-or-swim-only day, so the two cannot both
+be satisfied. Nothing caught it because nothing had ever tried to place the week.
+
+**Decision:** the planner places six running days and one rest day, and records
+a note on the week saying the target lost to the guardrail and why. The config
+is NOT edited -- `minRunDays` is a target the macro layer chose and this task
+does not own it.
+
+**Alternatives rejected:** (a) honouring `minRunDays: 7` and breaching the
+recovery rule, which inverts the whole point of a guardrail. (b) Silently
+lowering `minRunDays` in the config, which would make the conflict disappear
+without anyone deciding anything.
+
+**Consequences:** the peak week runs 100 km over six days rather than seven --
+16.7 km a day rather than 14.3, which is a real change in per-session tissue
+load and the exact axis `minRunDaysAtHighVolume` exists to guard (it wants six,
+and six is what it gets). Luis should ratify either the six-day peak or a change
+to the recovery minimum before the week of 28 September.
+
+**Status:** ACTIVE -- needs Luis's ratification before 2026-09-28

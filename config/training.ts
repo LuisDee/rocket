@@ -431,6 +431,13 @@ function shiftIsoDate(iso: string, days: number): string {
 /**
  * Named once and used twice: the free-evening count and the weekly cap on the
  * evening slot are the same fact, and two copies of a fact drift.
+ *
+ * SIX rather than seven because the swim takes one evening a week -- but WHICH
+ * evening is not recorded anywhere, and Luis has never said. That is a data gap,
+ * not a modelling choice: with the day known, the planner could leave that
+ * evening alone specifically and place around it; without it, the only honest
+ * model is one fewer evening somewhere in the week. Ask him, then replace this
+ * count with a weekday in `AVAILABILITY.runSlots`. Do not guess a day.
  */
 const FREE_EVENINGS_PER_WEEK = 6;
 

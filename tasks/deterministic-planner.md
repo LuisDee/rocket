@@ -118,6 +118,10 @@ for the two config additions. No schema change, no migration, no tool.
 - [x] the seven scenario fixtures
 - [x] `docs/decisions.md` + `docs/ci-gates.md` entries
 - [x] gates green, gate proven to fail on a deliberate violation
+- [x] inherited `src/mcp/tools.ts` and its test (ownership moved 2026-09-07):
+      the tool layer feeds `store.completedRuns()` into every evaluation, so
+      the ramp cap measures a planned week against a RUN week rather than
+      against another plan
 
 ## Commits
 
