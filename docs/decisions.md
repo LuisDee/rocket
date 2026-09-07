@@ -1045,3 +1045,98 @@ reason the boolean exists.
 **Status:** ACTIVE
 
 ---
+
+## 2026-09-07 -- the DoHardThings MCP stack works under Next 16, proved by running it
+
+**Context:** the plan said `@modelcontextprotocol/sdk` had gone v2 and was
+frozen at v1; the adversarial review said it had not. Ledger F22 settled the
+facts from npm -- v1 is at 1.30.0 and maintained, v2 shipped as the renamed
+`@modelcontextprotocol/server`, and `mcp-handler` tracked v2 to 2.1.1 rather
+than being superseded -- and chose the combination DoHardThings runs in
+production instead of either. That left exactly one untested variable: DHT is on
+Next 15.5.18 and this repo is on Next 16.3.1.
+
+**Decision:** `mcp-handler@1.1.0` + `@modelcontextprotocol/sdk@1.29.0`, both
+pinned exact, mounted at `src/app/api/mcp/[transport]/route.ts` with
+`basePath: '/api/mcp'` -- so the URL a client is given is `/api/mcp/mcp`.
+Stateless, no Redis. The Next 16 question is now answered by evidence rather
+than argument: `src/app/api/mcp/route.test.ts` drives a real `initialize`
+through the exported `POST` and gets a 200 carrying the server info, and
+`src/mcp/tools.test.ts` drives every tool through `tools/call` over a real
+client. Nothing about Next 16 breaks the stack.
+
+**The trap, recorded because the next person will hit it:** `mcp-handler@1.1.0`
+peer-depends on the SDK at exactly 1.26.0, so 1.29.0 is an unmet peer and
+`npm install` refuses it with ERESOLVE. Resolved by an `overrides` entry in
+`package.json` (`"mcp-handler": {"@modelcontextprotocol/sdk": "1.29.0"}`),
+committed, rather than by `--legacy-peer-deps`, which would have to be
+remembered on every machine and in CI. Pin what DHT has installed, never what
+the peer range asks for.
+
+**Alternatives rejected:** `mcp-handler@2.1.1` on `@modelcontextprotocol/server@2`,
+which is current and will be right eventually. Its migration requires
+`inputSchema` as a complete Standard Schema (`z.object(...)`) instead of raw zod
+shapes, so the DHT tool layer stops porting verbatim -- which was the entire
+reason for porting it. Revisit after 2026-10-24.
+
+**Consequences:** `npm ls zod` resolves every path to 4.4.3 with no transitive
+3.x, checked by hand on 2026-09-07 and carrying a `NOT IMPLEMENTED` ledger row
+because no CI step asserts it. A zod-3 copy does not fail a build; it fails
+`tools/list` in front of a live connector.
+
+**Status:** ACTIVE
+
+---
+
+## 2026-09-07 -- the subjective readiness inputs get stated ranges
+
+**Context:** `READINESS.subjectiveWeights` has weighted four inputs since the
+config was written, and nothing anywhere says what scale any of them is on.
+`check_ins.sleep` is a bare `real`. A weighted sum of four unbounded numbers is
+not a score, so readiness could not be computed at all without inventing them.
+
+**Decision:** `READINESS.inputScales` in `config/training.ts`, PROVISIONAL: RPE
+1-10 worse-high, soreness 0-5 worse-high, sleep in hours against a 9-hour full
+mark, motivation 1-5. It lives in the config rather than at the one call site
+because a scale IS a threshold (REDLINES.md rule 1), and because the
+alternative was four magic numbers inside a normaliser.
+
+This is a genuine gap in `docs/specs/02-load-engine.md`, not an implementation
+detail -- the spec should carry the ranges it has always implied.
+
+**Alternatives rejected:** inferring a scale per field at the call site, which
+puts the assumption where nobody reviewing the model would look for it.
+
+**Consequences:** a missing term renormalises over the terms present rather than
+scoring as zero -- a stored zero is the WORST possible reading, so treating an
+unanswered question as one would make a barely-touched form record a red
+morning. These four numbers are the first thing a calibration pass should move.
+
+**Status:** PROVISIONAL
+
+---
+
+## 2026-09-07 -- guardrail baselines come from completed runs, never from the plan
+
+**Context:** `evaluateGuardrails()` takes an optional `history` of completed
+runs, and the tool layer initially had no way to supply one -- the store could
+read sessions but not activities.
+
+**Decision:** `Store.completedRuns(from, to)` reads the `activities` table, and
+every tool that evaluates the window passes 60 days of it.
+
+**Alternatives rejected:** leaving `history` empty and letting the ramp and
+spike rules fall back to `BLOCK_WEEKS` targets. That is a plan measuring itself:
+a ramp cap comparing planned week against planned week always passes, because
+the plan was authored to pass it. The rule would have looked enforced and
+enforced nothing -- the same class of defect as a gate ledger row nobody
+watched fail.
+
+**Consequences:** the fallback order in `rampBaselineKm` still matters and is
+still right -- a week with no completed runs is far more often outside the
+recorded history than a week of genuine rest, so it falls back to the target
+rather than to zero. Until the Garmin backfill lands, most windows will use that
+fallback, which is a reason to land the backfill rather than a reason to trust
+the number.
+
+**Status:** ACTIVE

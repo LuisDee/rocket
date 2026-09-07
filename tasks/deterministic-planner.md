@@ -121,4 +121,4 @@ for the two config additions. No schema change, no migration, no tool.
 
 ## Commits
 
-(populated as work lands)
+3cca6a6 feat(planner): guardrails that negotiate, and a window that cannot be walked past them
