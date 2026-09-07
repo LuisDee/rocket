@@ -13,14 +13,17 @@
 
 import { randomUUID } from 'node:crypto';
 
+import type { ScorableActivity } from './load';
 import type { PlannedSession as PlannerSession } from './planner/types';
 import type { Store } from './store';
 import type {
   CheckIn,
+  IngestedActivity,
   LoggedActivity,
   Note,
   SessionRow,
   SessionChanges,
+  SyncRun,
 } from './types';
 
 /** Mirrors the postgres store's own filter, so the two agree on what a run is. */
@@ -35,8 +38,14 @@ export type MemoryStore = Store & {
   readonly rows: {
     sessions: SessionRow[];
     checkIns: CheckIn[];
+    /** Hand-logged activities -- what `rocket_log_activity` writes. */
     activities: LoggedActivity[];
+    /** Bridge-ingested activities. Separate only because their shapes differ. */
+    ingested: IngestedActivity[];
     notes: Note[];
+    /** Wellness days, verbatim, keyed on date -- the upsert target. */
+    wellness: Map<string, unknown>;
+    syncRuns: SyncRun[];
   };
 };
 
@@ -45,7 +54,10 @@ export function memoryStore(sessions: SessionRow[] = []): MemoryStore {
     sessions: [...sessions],
     checkIns: [] as CheckIn[],
     activities: [] as LoggedActivity[],
+    ingested: [] as IngestedActivity[],
     notes: [] as Note[],
+    wellness: new Map<string, unknown>(),
+    syncRuns: [] as SyncRun[],
   };
   /** Stands in for `activities.ingested_at`; set on every insert. */
   let lastIngest: Date | null = null;
@@ -113,11 +125,12 @@ export function memoryStore(sessions: SessionRow[] = []): MemoryStore {
     },
 
     completedRuns: async (from: string, to: string) =>
-      rows.activities
+      everyActivity()
         .filter(
           (a) =>
             a.localDate >= from &&
             a.localDate <= to &&
+            a.activityType !== null &&
             RUN_TYPES.has(a.activityType) &&
             (a.distanceM ?? 0) > 0,
         )
@@ -125,7 +138,9 @@ export function memoryStore(sessions: SessionRow[] = []): MemoryStore {
         .sort((a, b) => a.date.localeCompare(b.date)),
 
     activityHistoryDays: async (today) => {
-      const dates = rows.activities.map((a) => a.localDate).sort();
+      const dates = everyActivity()
+        .map((a) => a.localDate)
+        .sort();
       const earliest = dates[0];
       if (earliest === undefined) return 0;
       return Math.max(
@@ -148,5 +163,73 @@ export function memoryStore(sessions: SessionRow[] = []): MemoryStore {
     insertNote: async (note: Note) => {
       rows.notes.push(note);
     },
+
+    ingestActivities: async (incoming: readonly IngestedActivity[]) => {
+      // Mirrors the postgres store's `onConflictDoNothing`: the primary key is
+      // the upstream id, so re-offering a stored activity is a no-op and the
+      // return value is what was genuinely new.
+      const seen = new Set(rows.ingested.map((a) => a.id));
+      const fresh = incoming.filter((a) => !seen.has(a.id));
+      rows.ingested.push(...fresh);
+      if (fresh.length > 0) lastIngest = new Date();
+      return fresh.length;
+    },
+
+    upsertWellness: async (localDate: string, raw: unknown) => {
+      rows.wellness.set(localDate, raw);
+    },
+
+    scorableActivities: async (from: string, to: string) =>
+      everyActivity()
+        .filter((a) => a.localDate >= from && a.localDate <= to)
+        .map(({ localDate, durationS, rpe, trainingLoad }) => ({
+          localDate,
+          durationS,
+          rpe,
+          trainingLoad,
+        }))
+        .sort((a, b) => a.localDate.localeCompare(b.localDate)),
+
+    recordSyncRun: async (run: SyncRun) => {
+      rows.syncRuns.push(run);
+    },
+
+    lastSyncRun: async (job: string) =>
+      [...rows.syncRuns]
+        .filter((r) => r.job === job)
+        .sort((a, b) => b.ranAt.getTime() - a.ranAt.getTime())[0] ?? null,
   };
+
+  /**
+   * Both activity sources as one series.
+   *
+   * A hand-logged activity has an RPE and no training load; a bridge one has a
+   * training load and no RPE. The load engine's cascade takes whichever is
+   * there, so anything that reasons over history has to see both -- a ramp
+   * baseline blind to manual logs is a ramp baseline that reads zero during an
+   * integration outage, which is the exact opposite of what invariant 2 wants.
+   */
+  function everyActivity(): (ScorableActivity & {
+    activityType: string | null;
+    distanceM: number | null;
+  })[] {
+    return [
+      ...rows.activities.map((a) => ({
+        localDate: a.localDate,
+        activityType: a.activityType,
+        distanceM: a.distanceM,
+        durationS: a.durationS,
+        rpe: a.rpe,
+        trainingLoad: null,
+      })),
+      ...rows.ingested.map((a) => ({
+        localDate: a.localDate,
+        activityType: a.activityType,
+        distanceM: a.distanceM,
+        durationS: a.durationS,
+        rpe: null,
+        trainingLoad: a.activityTrainingLoad,
+      })),
+    ];
+  }
 }

@@ -17,14 +17,17 @@ import { and, desc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
 
 import { BLOCK_WEEKS } from '../../config/training';
 import { getDb, schema } from '../db/client';
+import type { ScorableActivity } from './load';
 import { mondayOf } from './planner/dates';
 import type { PlannedSession as PlannerSession } from './planner/types';
 import type {
   CheckIn,
+  IngestedActivity,
   LoggedActivity,
   Note,
   SessionRow,
   SessionChanges,
+  SyncRun,
 } from './types';
 
 export interface Store {
@@ -70,6 +73,40 @@ export interface Store {
   /** Notes about `today` or later that have not expired. */
   openNotes(today: string, now: Date): Promise<Note[]>;
   insertNote(note: Note): Promise<void>;
+
+  /* ----------------------------------------------------- the daily pass --- */
+
+  /**
+   * Activities from the bridge. Returns how many rows were NEW.
+   *
+   * Idempotent by primary key rather than by a "have I seen this day" flag:
+   * the ingest deliberately re-asks for `SYNC.ingestLookbackDays` because the
+   * cron is best-effort and the bridge can sync late, so re-offering a stored
+   * activity is the normal case, not the error case.
+   */
+  ingestActivities(rows: readonly IngestedActivity[]): Promise<number>;
+
+  /**
+   * One wellness day, stored verbatim and upserted on its date.
+   *
+   * No typed column, by Decision gate G1: nothing may lean on a bridge-supplied
+   * wellness field until `npm run probe:g1` has read a real payload.
+   */
+  upsertWellness(localDate: string, raw: unknown): Promise<void>;
+
+  /** Everything the load engine can score, over an inclusive span. */
+  scorableActivities(from: string, to: string): Promise<ScorableActivity[]>;
+
+  /**
+   * The heartbeat row. REDLINES.md rule 3.
+   *
+   * Written for a FAILED pass as well as a successful one, and written as a
+   * single statement outside any transaction so it survives the throw.
+   */
+  recordSyncRun(run: SyncRun): Promise<void>;
+
+  /** The newest heartbeat for a job, or null if the job has never run. */
+  lastSyncRun(job: string): Promise<SyncRun | null>;
 }
 
 type Db = ReturnType<typeof getDb>;
@@ -84,7 +121,8 @@ type Db = ReturnType<typeof getDb>;
 export function postgresStore(provided?: Db): Store {
   let resolved = provided;
   const db = (): Db => (resolved ??= getDb());
-  const { activities, checkIns, notes, sessions } = schema;
+  const { activities, checkIns, notes, sessions, syncRuns, wellnessRaw } =
+    schema;
 
   return {
     async window(from, to) {
@@ -255,6 +293,96 @@ export function postgresStore(provided?: Db): Store {
         source: note.source,
         expiresAt: note.expiresAt,
       });
+    },
+    async ingestActivities(rows) {
+      if (rows.length === 0) return 0;
+      // `onConflictDoNothing` and not an upsert: `activities` carries the
+      // append-only triggers, so an UPDATE here would be refused by the
+      // database (SQLSTATE 23001) rather than merely being wrong. Re-offering a
+      // stored activity has to be a no-op, and this makes it one.
+      const inserted = await db()
+        .insert(activities)
+        .values(
+          rows.map((row) => ({
+            id: row.id,
+            source: row.source,
+            localDate: row.localDate,
+            name: row.name,
+            activityType: row.activityType,
+            startTimeLocal: row.startTimeLocal,
+            distanceM: row.distanceM,
+            durationS: row.durationS,
+            elapsedDurationS: row.elapsedDurationS,
+            averageHr: row.averageHr,
+            maxHr: row.maxHr,
+            elevationGainM: row.elevationGainM,
+            calories: row.calories,
+            activityTrainingLoad: row.activityTrainingLoad,
+            raw: row.raw,
+          })),
+        )
+        .onConflictDoNothing()
+        .returning({ id: activities.id });
+      return inserted.length;
+    },
+
+    async upsertWellness(localDate, raw) {
+      await db()
+        .insert(wellnessRaw)
+        .values({ localDate, raw })
+        .onConflictDoUpdate({
+          target: wellnessRaw.localDate,
+          set: { raw, ingestedAt: new Date() },
+        });
+    },
+
+    async scorableActivities(from, to) {
+      const rows = await db()
+        .select({
+          localDate: activities.localDate,
+          durationS: activities.durationS,
+          rpe: activities.rpe,
+          trainingLoad: activities.activityTrainingLoad,
+        })
+        .from(activities)
+        .where(
+          and(gte(activities.localDate, from), lte(activities.localDate, to)),
+        )
+        .orderBy(activities.localDate);
+      return rows;
+    },
+
+    async recordSyncRun(run) {
+      // One statement, no transaction wrapper: `pg` runs it under autocommit,
+      // which is the whole point. A heartbeat written inside the transaction
+      // that a failure rolls back is a heartbeat that does not exist.
+      await db().insert(syncRuns).values({
+        id: run.id,
+        job: run.job,
+        ranAt: run.ranAt,
+        ok: run.ok,
+        detail: run.detail,
+        summary: run.summary,
+      });
+    },
+
+    async lastSyncRun(job) {
+      const rows = await db()
+        .select()
+        .from(syncRuns)
+        .where(eq(syncRuns.job, job))
+        .orderBy(desc(syncRuns.ranAt))
+        .limit(1);
+      const row = rows[0];
+      if (row === undefined) return null;
+      return {
+        id: row.id,
+        job: row.job,
+        ranAt: row.ranAt,
+        ok: row.ok,
+        detail: row.detail,
+        summary: row.summary,
+      };
     },
   };
 }

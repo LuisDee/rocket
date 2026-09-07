@@ -1357,3 +1357,125 @@ source and no code reads Strava -- but the ingest contract should state it befor
 anything does.
 
 **Status:** ACTIVE
+
+---
+
+## 2026-09-07 -- the daily pass ships against a faked transport, not against a key
+
+**Context:** intervals.icu was chosen as the primary Garmin bridge earlier the
+same day, and Luis has been asked to create the account, link Garmin and
+generate a personal API key. It does not exist yet. The daily pass, the
+outbound watch push and the G1 probe all need it.
+
+**Decision:** build the whole loop with the HTTP transport as a constructor
+argument, and drive every path -- auth scheme, error mapping, ingest
+idempotency, the loud-failure branch, the calendar upsert -- in `npm run test`
+against a fake. The only thing the key adds is a real socket.
+
+**Alternatives rejected:** waiting for the key. "We will test it when the
+credential arrives" is how an integration leg ships untested: the credential
+arrives, the happy path is eyeballed once, and the failure paths -- which are
+the ones that matter at 05:30 during taper -- are never exercised at all.
+
+**Consequences:** an unconfigured bridge is a REPORTED state, not a crash. The
+pass records `ok: false` naming both environment variables, writes its coach
+note, and withholds the dead-man's-switch ping, so the alarm fires daily until
+the key lands. That noise is deliberate: REDLINES rule 3 says the sync fails
+loudly, and "quietly does nothing until someone remembers" is the failure it
+names. Manual logging and check-ins are untouched (spec invariant 2).
+
+The request shapes remain UNVERIFIED against a live account -- they come from
+the vendor's forum guide, not from a response anyone here has seen. That is the
+same class of gap Decision gate G1 exists to close, and it is why the probe
+reports the key set it observes rather than the one the client expects. The
+first real call is allowed to disagree with the client.
+
+**Status:** ACTIVE
+
+---
+
+## 2026-09-07 -- CTL is warm-started from Garmin's own measured pair
+
+**Context:** `LOAD.ctlDays` is 42 and training data in our own store starts
+essentially now. A 42-day exponential average initialised at zero does not
+converge for one time constant: it ramps upward as a pure artefact of its
+window filling, so TSB reads deeply negative and every trend line points the
+wrong way during exactly the weeks a block is being established. False-red
+during establishment is worse than no reading.
+
+**Decision:** `LOAD.seed` in `config/training.ts` -- `ctl: 287`, `atl: 296`,
+`asOf: '2026-09-06'` -- read off the watch as Garmin's own
+`dailyTrainingLoadChronic` and `dailyTrainingLoadAcute`. `rollingLoad()` starts
+the recursion from that pair on the day after `asOf`.
+
+**Alternatives rejected:** starting at zero and telling the reader to ignore
+the first six weeks, which is a caveat nobody applies in the moment; and
+backfilling first, which is decoupled and gated on a bulk export with a 24-48h
+turnaround that had not been requested when this landed. The plan already names
+this pair as the cut line if the export has not arrived by 2026-09-14
+(`PLAN-2026-001-m1-core-loop.md:472`), so this executes a decision already made
+rather than making a new one.
+
+**Consequences:** the series inherits Garmin's model in GARMIN'S UNITS, which
+are not our session-RPE units. That is why `activity_training_load` is the
+preferred per-day input and why `coverage.daysOnRpeFloor` counts the days that
+fell back to the Foster floor -- a mixed series has a step change in it and has
+to say so. `warmingUp` stays true, and its caveat names the seed pair and the
+date it was read, until 42 days of our own history exist. Delete the seed once
+the backfill lands and a real 42-day series can be computed.
+
+**Status:** PROVISIONAL -- settled by the bulk-export backfill.
+
+---
+
+## 2026-09-07 -- wellness lands untyped until Decision gate G1 has run
+
+**Context:** the daily pass has to ingest wellness or it is not the pass
+`05-integrations.md` describes. Decision gate G1 forbids designing the wellness
+schema before the probe returns: the bridge's coverage of `hrv`, `restingHR`,
+`sleepScore` and `bodyBattery` is the one thing the research could not confirm
+from a primary source, and a 2026-05-19 bug report shows partial syncs.
+
+**Decision:** a `wellness_raw` table of `(local_date, raw jsonb, ingested_at)`
+with NO typed column, upserted per day. The pass stores whatever the bridge
+returned, whole.
+
+**Alternatives rejected:** typing the four fields now and accepting nulls,
+which is exactly what the gate forbids -- a column named after a field that
+arrives null forever is worse than no column, because it looks like coverage.
+Also rejected: skipping wellness ingest until the probe runs, which would mean
+throwing away every day of data between now and whenever the key arrives.
+
+**Consequences:** when `npm run probe:g1` has written
+`docs/G1-BRIDGE-PROBE.md`, the typed table is derived FROM these rows by a
+migration reading data already in hand -- no re-ingest and no gap. The
+migration grants UPDATE and DELETE on `wellness_raw` for that reason and says
+so. The readiness objective block stays unbuilt until then, which is where it
+already was.
+
+**Status:** ACTIVE -- superseded the moment G1 reports.
+
+---
+
+## 2026-09-07 -- the rolling window is refilled BEFORE any replan repair, not after
+
+**Context:** found by a test, not by reading. The daily pass evaluates replan
+triggers and also keeps the micro-planner's rolling window full. Run in the
+obvious order -- repair first, then top up the window -- a soreness downgrade
+was silently undone: `planWindow()` re-derives the week from the macro layer
+and put the quality session straight back.
+
+**Decision:** the window is filled from the macro layer first, and every
+`replan()` repair is applied to the window that results.
+
+**Alternatives rejected:** making the rollover preserve repairs, which means
+teaching the deterministic placer about check-in state it has no business
+knowing; and skipping the rollover on any day a trigger fires, which would let
+the window run short precisely on the days something went wrong.
+
+**Consequences:** a repair is always applied to a window that exists, which is
+the order `repair()` assumes anyway -- it maps over a window rather than
+creating one. The test that caught it asserts no `quality` session survives in
+the window after a soreness check-in.
+
+**Status:** ACTIVE

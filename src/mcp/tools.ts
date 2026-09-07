@@ -36,6 +36,7 @@ import {
   SYNC,
 } from '../../config/training';
 import { checkInFields, checkInSchema, recordCheckIn } from '../domain/checkin';
+import { DAILY_PASS_JOB } from '../jobs/daily-pass';
 import { shiftIso } from '../domain/planner/dates';
 import { evaluateGuardrails } from '../domain/planner/guardrails';
 import {
@@ -146,19 +147,49 @@ function goalBand(): string {
   return `${formatDuration(fast)}-${formatDuration(slow)}`;
 }
 
-/** The staleness flag REDLINES.md rule 3 requires to be loud, never absent. */
+/**
+ * The staleness flag REDLINES.md rule 3 requires to be loud, never absent.
+ *
+ * TWO readings, because they answer different questions and either alone lies.
+ * `lastIngestAt` says when an activity last arrived -- but a week of genuine
+ * rest looks exactly like a dead sync through that lens. `lastSyncRun` says
+ * when the job last RAN and whether it succeeded, which is the reading that
+ * separates "nothing to ingest" from "nothing is ingesting". A failed pass with
+ * no new activities is invisible without it, and that is precisely the sync
+ * that dies quietly during taper.
+ */
 async function stalenessFlag(store: Store, now: Date): Promise<string> {
-  const last = await store.lastIngestAt();
-  if (last === null) {
-    return (
-      'No activity has ever been ingested. There is no sync wired yet, so every ' +
-      'activity has to arrive through rocket_log_activity.'
-    );
-  }
-  const hours = (now.getTime() - last.getTime()) / 3_600_000;
-  return hours > SYNC.staleAfterHours
-    ? `STALE: last ingest ${Math.round(hours)} hours ago, past the ${SYNC.staleAfterHours}-hour threshold.`
-    : `Last ingest ${Math.round(hours)} hours ago.`;
+  const [last, run] = await Promise.all([
+    store.lastIngestAt(),
+    store.lastSyncRun(DAILY_PASS_JOB),
+  ]);
+
+  const job =
+    run === null
+      ? 'The daily pass has never run.'
+      : run.ok
+        ? `Daily pass last succeeded ${hoursAgo(run.ranAt, now)}.`
+        : `DAILY PASS FAILING since ${hoursAgo(run.ranAt, now)}: ${run.detail}`;
+
+  const jobStale =
+    run !== null && hoursSince(run.ranAt, now) > SYNC.staleAfterHours
+      ? ` STALE: no pass in ${String(Math.round(hoursSince(run.ranAt, now)))} hours, past the ${String(SYNC.staleAfterHours)}-hour threshold.`
+      : '';
+
+  const ingest =
+    last === null
+      ? 'No activity has ever been ingested; every activity has to arrive through rocket_log_activity.'
+      : `Last ingest ${hoursAgo(last, now)}.`;
+
+  return `${job}${jobStale} ${ingest}`;
+}
+
+function hoursSince(at: Date, now: Date): number {
+  return (now.getTime() - at.getTime()) / 3_600_000;
+}
+
+function hoursAgo(at: Date, now: Date): string {
+  return `${String(Math.round(hoursSince(at, now)))} hours ago`;
 }
 
 /** Refusals the athlete's override cannot clear: the taper and injury gates. */

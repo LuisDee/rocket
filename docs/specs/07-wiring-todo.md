@@ -16,7 +16,12 @@
 ## External tasks on Luis (not code)
 - [x] Garmin: confirm watch model -- **Fenix 8** (2026-08-18). Top tier; every
       wellness field exists, gated on wearing it asleep rather than on the model.
-- [ ] Garmin: run the source probe (bridge vs direct library) before any schema.
+- [ ] Garmin: run the source probe (Decision gate G1) before any schema leans on
+      a wellness field. It is now one command --
+      `INTERVALS_API_KEY=... INTERVALS_ATHLETE_ID=... npm run probe:g1` -- which
+      reads seven days of wellness and writes `docs/G1-BRIDGE-PROBE.md`. Needs
+      the intervals.icu account linked to Garmin and one sync cycle elapsed.
+      Until it has run, `wellness_raw` stores the payload untyped.
 - [ ] Garmin: request the bulk account export -- 24-48h turnaround, the only
       sanctioned complete-history source. Blocks the backfill, so request early.
 - [ ] Garmin: confirm whether the watch is worn asleep, and for how long

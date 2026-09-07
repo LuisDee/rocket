@@ -550,6 +550,42 @@ export const LOAD = {
    * rule 4). Equal to ctlDays deliberately.
    */
   ctlWarmUpDays: 42,
+
+  /**
+   * WARM START. Garmin's own measured chronic/acute pair, read off the watch on
+   * 2026-09-06, used as the initial condition of our EWMA rather than starting
+   * it at zero.
+   *
+   * Why this is not a cosmetic convenience. A 42-day exponential average
+   * initialised at zero does not converge for six weeks: it ramps upward as a
+   * pure artefact of the window filling, so TSB (CTL - ATL) reads deeply
+   * negative for the whole establishment phase of a block and every trend line
+   * points the wrong way. Seeding removes the artefact, at the cost of
+   * inheriting whatever Garmin's model believes -- which is the correct trade
+   * here, because Garmin has the history and we do not.
+   *
+   * The units are GARMIN TRAINING LOAD, not our stress score, and the two are
+   * not the same scale. That is deliberate and is the reason
+   * `activity_training_load` is the preferred per-day input: seeding a series
+   * in one unit and continuing it in another would produce a discontinuity
+   * exactly at the seed date. Where a day has no Garmin load, the RPE floor
+   * stands in and the mixture is stated in the coverage the computation
+   * returns.
+   *
+   * PROVISIONAL: settled by the bulk export backfill
+   * (PLAN-2026-001-m1-core-loop.md:472 names this pair as the cut line if the
+   * export has not arrived by 2026-09-14). Once a real 42-day series exists,
+   * recompute from it and delete the seed.
+   */
+  seed: {
+    /** Garmin `dailyTrainingLoadChronic`. */
+    ctl: 287,
+    /** Garmin `dailyTrainingLoadAcute`. */
+    atl: 296,
+    /** The day the pair was read. The EWMA starts from the day AFTER this. */
+    asOf: '2026-09-06',
+    source: 'Garmin dailyTrainingLoadChronic/dailyTrainingLoadAcute, Fenix 8',
+  },
 } as const;
 
 /**
@@ -761,6 +797,25 @@ export const REPLAN = {
 export const SYNC = {
   /** No successful Garmin pull in this long raises a visible staleness flag. */
   staleAfterHours: 36,
+
+  /**
+   * How far back the daily ingest asks the bridge for. Wider than one day on
+   * purpose: the cron is best-effort (Vercel Hobby delivers within about an
+   * hour and never retries, so a run can be missed with no log), and a bridge
+   * that syncs late would otherwise leave a permanent hole. Re-fetching a day
+   * already stored is free -- ingest is keyed on the upstream activity id.
+   */
+  ingestLookbackDays: 5,
+
+  /**
+   * How many days of the plan are written to the watch, today included.
+   *
+   * Matches the low end of `REPLAN.rollingWindowDays` rather than the high end:
+   * everything pushed beyond the horizon the planner actually holds concrete is
+   * a session likely to move before it is run, and a watch calendar that
+   * contradicts itself twice a week teaches the athlete to ignore it.
+   */
+  watchPushDays: 7,
 } as const;
 
 /** One planned day. `km: 0` is a rest day; `kind` says what it is for. */

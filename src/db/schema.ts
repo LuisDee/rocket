@@ -1,6 +1,8 @@
 /**
- * The five tables M1 needs. Wellness snapshots, availability rules and plan
- * revisions are deliberately absent until something reads them.
+ * The five tables M1 needs, plus the two the daily pass added. Availability
+ * rules and a TYPED wellness table are deliberately still absent: the first is
+ * covered by dated notes, and the second is what Decision gate G1 forbids until
+ * the probe has read a real payload (`wellness_raw` holds it whole meanwhile).
  *
  * The split that matters is not by entity, it is by MUTABILITY:
  *
@@ -253,6 +255,68 @@ export const notes = pgTable(
   },
   (t) => [index('notes_local_date_idx').on(t.localDate)],
 );
+
+/* ------------------------------------------------------------ the sync --- */
+
+/**
+ * The heartbeat. REDLINES.md rule 3: the daily sync fails loudly.
+ *
+ * One row per run of the daily pass, success or failure, written under
+ * AUTOCOMMIT -- a plain single-statement insert outside any transaction -- so
+ * the failure row survives the throw that caused it. A row written inside the
+ * transaction the failure rolls back is a row that does not exist, which is the
+ * exact shape of a sync that "dies quietly during taper".
+ *
+ * This is layer 1 of three, and it is blind by construction to the one failure
+ * that matters most: a job that never ran writes no row at all. Layer 2 is the
+ * healthchecks.io dead-man's switch pinged as the pass's final step; layer 3 is
+ * `rocket_get_status` reporting staleness once `SYNC.staleAfterHours` trips.
+ *
+ * MUTABLE by omission rather than by intent -- it is operational telemetry, not
+ * training history, so it is not in `APPEND_ONLY_TABLES`. Nothing updates it.
+ */
+export const syncRuns = pgTable(
+  'sync_runs',
+  {
+    id: text('id').primaryKey(),
+    /** Which scheduled job. One today (`daily-pass`); named so a second one can exist. */
+    job: text('job').notNull(),
+    ranAt: timestamp('ran_at', { withTimezone: true }).notNull().defaultNow(),
+    ok: boolean('ok').notNull(),
+    /** One human sentence. The thing a person reads at 07:00 on a bad morning. */
+    detail: text('detail').notNull(),
+    /** The structured pass result: counts, triggers fired, load state. */
+    summary: jsonb('summary'),
+  },
+  (t) => [index('sync_runs_ran_at_idx').on(t.ranAt)],
+);
+
+/**
+ * Wellness, exactly as the bridge returned it. NO TYPED COLUMNS, deliberately.
+ *
+ * Decision gate G1 (`docs/plans/PLAN-2026-001-m1-core-loop.md:295-309`) forbids
+ * designing the wellness schema before the probe returns a real payload: the
+ * bridge's coverage of `hrv`, `restingHR`, `sleepScore` and `bodyBattery` is
+ * the one thing the research could not confirm from a primary source, and a
+ * column named after a field that arrives null forever is worse than no column.
+ *
+ * The daily pass still has to ingest wellness or it is not the pass the spec
+ * describes, so it lands here whole. When `npm run probe:g1` has run and
+ * `docs/G1-BRIDGE-PROBE.md` says what is actually populated, the typed table is
+ * derived FROM this one by a migration that reads rows already in hand -- no
+ * re-ingest, no gap.
+ *
+ * Keyed by local date and UPSERTED: a wellness day is re-stated by the bridge
+ * as the day's data lands (overnight metrics arrive after the morning sync),
+ * and it is re-fetchable, so it is not history in the append-only sense.
+ */
+export const wellnessRaw = pgTable('wellness_raw', {
+  localDate: date('local_date').primaryKey(),
+  raw: jsonb('raw').notNull(),
+  ingestedAt: timestamp('ingested_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 
 /** Tables the append-only guards protect. The migration and tests both read this. */
 export const APPEND_ONLY_TABLES = ['activities', 'check_ins'] as const;

@@ -16,9 +16,10 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { LOAD, READINESS } from '../../config/training';
+import { LOAD, READINESS, SYNC } from '../../config/training';
 import { memoryStore, type MemoryStore } from '../domain/store-memory';
 import type { SessionRow } from '../domain/types';
+import { DAILY_PASS_JOB } from '../jobs/daily-pass';
 import { registerRocketTools } from './tools';
 
 /** A Monday inside the block, so the window covers real weeks. */
@@ -258,6 +259,42 @@ describe('rocket_get_status', () => {
     const status = payload(await call(client, 'rocket_get_status'));
     const window = status['rolling_window'] as { sessions: { id: string }[] };
     expect(window.sessions.map((s) => s.id)).toContain('sess-1');
+  });
+
+  it('surfaces a FAILED daily pass, which no activity count can reveal', async () => {
+    // REDLINES.md rule 3. A failed pull that ingested nothing is
+    // indistinguishable from a genuine rest day through `lastIngestAt` alone,
+    // and that is exactly the sync that dies quietly during taper.
+    await store.recordSyncRun({
+      id: 'run-1',
+      job: DAILY_PASS_JOB,
+      ranAt: new Date(`${TODAY}T04:30:00Z`),
+      ok: false,
+      detail: 'Daily pass FAILED: intervals.icu 503: upstream down',
+      summary: null,
+    });
+
+    const status = payload(await call(client, 'rocket_get_status'));
+    expect(status['staleness']).toContain('DAILY PASS FAILING');
+    expect(status['staleness']).toContain('503');
+  });
+
+  it('flags a pass that has not run inside the staleness threshold', async () => {
+    await store.recordSyncRun({
+      id: 'run-2',
+      job: DAILY_PASS_JOB,
+      ranAt: new Date(
+        Date.parse(`${TODAY}T07:00:00Z`) -
+          (SYNC.staleAfterHours + 1) * 3_600_000,
+      ),
+      ok: true,
+      detail: 'Daily pass fine, but long ago.',
+      summary: null,
+    });
+
+    const status = payload(await call(client, 'rocket_get_status'));
+    expect(status['staleness']).toContain('STALE');
+    expect(status['staleness']).toContain(String(SYNC.staleAfterHours));
   });
 });
 
