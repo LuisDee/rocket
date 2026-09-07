@@ -267,7 +267,7 @@ The spec calls run-commutes "the biggest lever for fitting 60 km around five swi
 
 **Out of scope** — each tracked as a `NOT IMPLEMENTED` row in `docs/ci-gates.md` or a milestone in `07-wiring-todo.md`
 
-- PWA and the one-tap check-in UI (M2). MCP is the only interface in M1.
+- The full PWA (M2). **Amended 2026-09-07**: MCP is no longer the only interface, because the F32 gate above requires `src/app/page.tsx` to read activities from Postgres and accept a check-in write by 2026-09-14. One page that takes one check-in is in scope; installability, offline behaviour and the one-tap UI are not.
 - Garmin sync, wellness ingest, `sync_now` (M3).
 - DoHardThings race sync (M4) — races are seeded by hand in M1.
 - routr and `propose_route` (M5).
