@@ -104,4 +104,4 @@ and the weekday is deliberately not guessed, because nothing records it.
 
 ## Commits
 
-(populated as work lands)
+- `fb2cb6f` fix(config): guardrail on the axis the evidence supports, and the spike it catches
