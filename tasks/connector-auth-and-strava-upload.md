@@ -164,4 +164,4 @@ exist. Fixed there; `docs/ci-gates.md` gains the new row only.
 
 ## Commits
 
-(populated as work lands)
+57e0608 docs(connector): no OAuth server is needed, and Strava uploads are prohibited
