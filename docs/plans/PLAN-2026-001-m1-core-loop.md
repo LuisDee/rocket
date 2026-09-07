@@ -1,9 +1,9 @@
 # PLAN-2026-001 — M1: the core loop (domain, load engine, planner, MCP surface)
 
 **Spec**: `docs/specs/00-overview.md` … `07-wiring-todo.md` (the seeded spec pack — no `SPEC-YYYY-NNN` file exists; the pack is the source of truth and this plan consumes it rather than re-deriving it).
-**Status**: DRAFT — awaiting approval before any implementation.
+**Status**: ACTIVE, rewritten 2026-09-07 for **option A** (ratified by Luis that day). Stage 1 is delivered; Stages 3 and 5 are cut in place; every cut carries a row in the Deferred-Items Register at the end of Phase 2. The corrections applied in that rewrite answer `docs/reviews/2026-09-07-response-ledger.md` rows F30/F2/F31, F22, F23, F29/S6.8, F25, F32, F21 and F14, and the ledger is authoritative over the 2026-09-06 review where the two differ.
 **Branch/worktree**: `.worktrees/m1-core-loop` on `feat/m1-core-loop`. Main stays on `main`.
-**Clock**: written 2026-08-16, Garmin sections revised 2026-08-18, macro layer re-derived 2026-09-06. Race is 2026-10-24, **48 days out**. The block now runs from 2026-09-07: a taper week into the **Battersea Park Half on Sat 12 Sep** (same park as the goal race, so it doubles as a course rehearsal AND is what settles goal marathon pace -- it replaces Lincoln in that role, three weeks earlier), then four build weeks, then two taper weeks. Only **four long runs** fit before the taper against the six to eight a normal block carries, which is the binding constraint on race day and what makes the Stage 3b backfill urgent.
+**Clock**: written 2026-08-16, Garmin sections revised 2026-08-18, macro layer re-derived 2026-09-06, rewritten for option A 2026-09-07. Race is 2026-10-24, **47 days out**. The block now runs from 2026-09-07: a taper week into the **Battersea Park Half on Sat 12 Sep** (same park as the goal race, so it doubles as a course rehearsal AND is what settles goal marathon pace -- it replaces Lincoln in that role, three weeks earlier), then four build weeks, then two taper weeks. Only **four long runs** fit before the taper against the six to eight a normal block carries, which is the binding constraint on race day and what makes the Stage 3b backfill urgent.
 
 ---
 
@@ -14,6 +14,27 @@
 `rocket` is a greenfield Next.js 16.3.1 / React 19.2.8 / TypeScript app scaffolded on 2026-08-15 (`08cdf28`). It has no domain code: 9 default `create-next-app` files, plus `config/training.ts` (every training threshold, all `PROVISIONAL`) and its 12-assertion test. Toolchain: npm, Node 24.x, `tsc --noEmit` with `strict` plus `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`; eslint with four type-aware rules; prettier; vitest. Seven gates run in CI, all proven to fail on a deliberate violation (`docs/ci-gates.md`).
 
 Because rocket has no patterns of its own yet, "codebase patterns to follow" means **DoHardThings** (`~/dev/DoHardThings`), the same author's working Next.js-on-Vercel app with a live claude.ai MCP connector. It is the porting source. Its local `main` is 13 commits behind `origin/main`; **fetch before porting** — of the MCP surface only `lib/mcp-tools.ts`, `lib/mcp-create.ts` and the new `lib/mcp-image.ts` differ.
+
+### What to lift from DoHardThings, in option-A order
+
+Re-ranked 2026-09-07 (ledger F25). The original table was ordered by size, which put its largest row — the OAuth shim —
+first; option A defers exactly that row, so following the old order would have spent the first days of a two-week window on
+the one thing that was just cut. Line counts are the review's, corrected by the ledger's spot-check against the working tree.
+
+| #   | Asset                        | Files                                                                                    | Lines                                        | Reuse                                                                                               | Lands at                                                         |
+| --- | ---------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| 1   | **MCP handler wiring**       | `app/api/mcp/[transport]/route.ts`                                                       | 63                                           | verbatim, including `basePath` and the dual-mode 401                                                | Stage 4                                                          |
+| 2   | **Utilities**                | `calendar-grid.ts`, `format.ts`, `day-param.ts`, `rate-limit.ts`, `logger.ts`, `http.ts` | 358                                          | verbatim                                                                                            | Stages 2–4, as each is needed                                    |
+| 3   | **Ingest ordering pattern**  | the Strava ingest/token/webhook/crypto quartet plus its store triple                     | ~550                                         | **pattern only**, retargeted at intervals.icu — rocket holds no Strava API credentials (ledger F17) | Stage 3b and the daily job                                       |
+| 4   | **ICS export + signed feed** | `lib/ics.ts`, `lib/ics-feed.ts`                                                          | 232                                          | verbatim                                                                                            | With the outbound calendar leg                                   |
+| 5   | **Push stack**               | `lib/push-*`, `lib/sw-push.ts`, `app/sw.ts`                                              | 650 (the review said ~500; it under-counted) | verbatim minus branding                                                                             | Last before the race, per the 2026-09-06 service-worker decision |
+| 6   | **MCP OAuth 2.1 shim**       | `app/api/mcp/oauth/*`, `lib/mcp-oauth.ts`, `lib/mcp-auth.ts`, `next.config.ts` rewrites  | ~600                                         | near verbatim, plus an owner allowlist                                                              | **Post 2026-10-24** (Stage 5, deferred)                          |
+
+Do **not** inherit Google-Calendar-as-database or DHT's signed-in-equals-god-access model. Closing evidence on the repo
+boundary, discovered after the review: DHT stores its race domain fields in Google Calendar `extendedProperties`, and the
+Google Calendar connector does not return `extendedProperties` — so DHT's own race data is not queryable by a third party
+through the store it lives in. Merging the repos would inherit an unqueryable store for precisely the one entity that made
+the merge argument. The question is closed.
 
 ### Skills and agents to leverage
 
@@ -31,43 +52,43 @@ Because rocket has no patterns of its own yet, "codebase patterns to follow" mea
 
 ### Key discovered facts (verified this session)
 
-| Fact                                                                                                                                                                                                                                                                                                                                                                          | Source                                                                                                                       |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **The MCP TypeScript SDK went v2.** `@modelcontextprotocol/sdk` is frozen at 1.30.0; the monolith split into `@modelcontextprotocol/server@2.0.0`, `client@2.0.0`, `core@2.0.0`                                                                                                                                                                                               | npm registry, 2026-08-16                                                                                                     |
-| SDK v2 ships its own `createMcpHandler()` returning a Web-standard `(Request) => Promise<Response>`, plus `requireBearerAuth`, `getOAuthProtectedResourceMetadataUrl`, `buildOAuthProtectedResourceMetadata`. **`mcp-handler` is now a thin re-wrapper — drop it**                                                                                                            | SDK v2 exports, verified by a running server                                                                                 |
-| DoHardThings uses the **old** stack: `mcp-handler@^1.1.0` + `@modelcontextprotocol/sdk@^1.29.0`, mounted at `app/api/mcp/[transport]/route.ts`                                                                                                                                                                                                                                | `DoHardThings/package.json`, `app/api/mcp/[transport]/route.ts:24-40`                                                        |
-| **zod v4 is required.** zod 3 registers fine then explodes at `tools/list` — invisible until claude.ai first talks to the server. Import as `import * as z from 'zod/v4'`                                                                                                                                                                                                     | empirically confirmed by the researcher                                                                                      |
-| Stateless is the only mode: the 2026-07-28 spec revision removed `Mcp-Session-Id` entirely. claude.ai is still a 2025-era client (`SUPPORTED_PROTOCOL_VERSIONS` tops at 2025-11-25), so keep SDK v2's default dual-era `legacy: 'stateless'`, never `legacy: 'reject'`                                                                                                        | Anthropic connector docs; SDK v2 defaults                                                                                    |
-| **DHT security trap CONFIRMED:** `app/api/mcp/oauth/authorize/route.ts:42-57` mints an authorization code for **any** email completing Google sign-in. No allowlist, and no `signIn` callback in `lib/auth.ts:26-28`. `friends.json` is display-only                                                                                                                          | read directly on `origin/main`                                                                                               |
-| DHT tool handlers **do not know who is calling** — the OAuth subject is verified at the gate then discarded; handlers call `mcpActorEmail()`, a static env var                                                                                                                                                                                                                | `lib/mcp-create.ts:53-55`                                                                                                    |
-| DHT tool results are text-only, and handlers **never throw**: `ok()` / `fail()` / `reason()` map a `ZodError` to field-level guidance (`date: Invalid`, not a stack trace)                                                                                                                                                                                                    | `lib/mcp-tools.ts:52-74`                                                                                                     |
-| DHT `inputSchema` is a **plain object of zod validators, not a wrapping `z.object()`** — the most common porting mistake                                                                                                                                                                                                                                                      | `lib/mcp-tools.ts:112-132`                                                                                                   |
-| DHT genuinely has **no database** (`DATABASE_URL` deliberately removed). Google Calendar is the event store; Upstash Redis holds structured records; Vercel Blob holds images                                                                                                                                                                                                 | `DoHardThings/CLAUDE.md:101`, `lib/*-store.ts`                                                                               |
-| DHT's store seam — `*-types.ts` (interface, zero imports) / `*-memory.ts` / `*-real.ts` / factory with a `configured()` predicate — is the testability pattern to copy                                                                                                                                                                                                        | `lib/push-store.ts`                                                                                                          |
-| Vercel's Neon recommendation **reversed**: with Fluid compute it is now plain `pg` Pool + `attachDatabasePool()` over TCP to the `-pooler` host, **not** the Neon HTTP driver. Most search results still say otherwise                                                                                                                                                        | Neon/Vercel docs, 2026-08                                                                                                    |
-| Append-only needs **two** binding layers: privilege revoke binds the app role (SQLSTATE 42501) but is void against the owner, who can re-grant to itself; an `ENABLE ALWAYS BEFORE UPDATE OR DELETE` trigger binds the owner (23001). **Rules and RLS fail silently** — verified: a rule reported `UPDATE 0` and left the row intact                                          | executed on PostgreSQL 18.6                                                                                                  |
-| Prisma's drift remedy is `migrate reset`, which drops and recreates — **verified to destroy triggers and ACLs**. Drizzle's "the SQL file is the migration" model keeps guards inside the migration chain                                                                                                                                                                      | verified                                                                                                                     |
-| Drizzle 1.0 has been in RC since May 2026 and still is not GA; `0.45.2` is what you actually pin                                                                                                                                                                                                                                                                              | npm, 2026-08-16                                                                                                              |
-| **No validated two-component cardio/musculoskeletal stress score exists in the literature.** Closest commercial: Polar Training Load Pro (Cardio Load = TRIMP, Muscle Load = mechanical kJ). Closest science: differential RPE, which validates a _perceptual_ split, not a computed one                                                                                      | literature review                                                                                                            |
-| **No published coefficient converts descent metres into muscle-damage load.** The effect is qualitatively certain (CK, MVC loss, DOMS rise while metabolic cost falls) but every number is a calibration knob                                                                                                                                                                 | Minetti; EIMD literature                                                                                                     |
-| ACWR has been statistically dismantled — Lolli 2019 (mathematical coupling / spurious correlation), Impellizzeri 2020 (acute-to-_random_ predicts injury as well as acute-to-chronic)                                                                                                                                                                                         | published critique                                                                                                           |
-| Raw Foster sRPE is ~180–360 AU/hour while TSS is ~100/hour. Mixing them in one EWMA would **triple ATL** on a week of missing HR data and fake an overreaching alarm                                                                                                                                                                                                          | units analysis                                                                                                               |
-| ATL/CTL 7/42-day EWMA is a **vendor convention** (TrainingPeaks), not a finding. Hellard showed individual time constants are non-identifiable (tau correlation 0.99) — do not fit them                                                                                                                                                                                       | literature                                                                                                                   |
-| **Watch is a Fenix 8** (confirmed 2026-08-18). Top tier: HRV status + baseline band, Body Battery, sleep staging, sleep score, Training Readiness, Training Status, native running dynamics. Every overnight metric gated on being **worn asleep**, not on the model                                                                                                          | Garmin support tiering; research rated device lists only _medium_ confidence — they are the least stable thing in the report |
-| Garmin exposes a **real acute/chronic pair**: `get_training_status()` → `acuteTrainingLoadDTO.dailyTrainingLoadAcute` / `dailyTrainingLoadChronic` / `dailyAcuteChronicWorkloadRatio`; and `get_training_readiness()` → score 1–100, level, and five weighted factors                                                                                                         | `garminconnect/__init__.py:2213-2219`, typed.py                                                                              |
-| HRV comes back in **all shapes at once**: `hrvSummary.lastNightAvg`, `.weeklyAvg` (7-day), `.status` enum, `.baseline` band, plus raw ~5-minute overnight readings                                                                                                                                                                                                            | `garminconnect/__init__.py:2027-2046`, typed.py `HrvData`                                                                    |
-| `python-garminconnect` **no longer depends on `garth`** as of 0.3.11. Every third-party guide documenting `garth.dumps()` / `GARMINTOKENS_BASE64` is stale                                                                                                                                                                                                                    | pyproject.toml + PyPI, read 2026-08-18                                                                                       |
-| `Garmin.login()` accepts an **inline JSON token string** (`_looks_like_json()` → `client.loads()`), so no filesystem is needed. **But in that mode it never writes rotated tokens back** — every `client.dump()` is gated on `tokenstore_path is not None`, while `_refresh_di_token()` does rotate. The caller must persist `client.dumps()` after every login               | `garminconnect/__init__.py:182-192,739-749,772-781`                                                                          |
-| **429 lockout is keyed per-account** (clientId + email), empirically inescapable by changing IP or headers, lasting 48–72+ hours with no recovery process                                                                                                                                                                                                                     | issue #344                                                                                                                   |
-| No official route for one person: Developer Program is business-use-only and its request form has been a "System Maintenance" block since 2026-03-25                                                                                                                                                                                                                          | verified live 2026-08-18                                                                                                     |
-| intervals.icu holds **genuine Garmin partner OAuth** (connecting shows Garmin's own consent screen) and issues a self-serve personal API key. **But its wellness field coverage is UNVERIFIED** — the claim rests on an undated third-party guide plus forum threads, and a 2026-05-19 bug report shows partial syncs (sleep arriving; RHR, HRV, steps, body battery missing) | research, explicitly hedged                                                                                                  |
-| Vercel Hobby cron: **1×/day, ±59 min, never retried, best-effort** — runs can be missed with no log produced                                                                                                                                                                                                                                                                  | Vercel docs                                                                                                                  |
+| Fact                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Source                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **CORRECTED 2026-09-07 — SDK v1 is current, not frozen.** `@modelcontextprotocol/sdk` is at 1.30.0, published 2026-07-27: maintained, not abandoned. The monolith additionally split into `@modelcontextprotocol/server@2.0.0`, `client@2.0.0`, `core@2.0.0`, so v2 is real — but "frozen" overstated v1's status and this plan built on that overstatement                                                                                                                                                                                             | npm registry, re-read 2026-09-07 (ledger F22)                                                                                |
+| **CORRECTED 2026-09-07 — `mcp-handler` was not superseded.** It is at 2.1.1, published 2026-08-13, `peerDependencies {"@modelcontextprotocol/server": "^2.0.0", "next": ">=13.0.0"}`, serving the 2026-07-28 spec natively with fallback for 2025-era clients. Vercel's package **tracked** v2 rather than being displaced by it. The "thin re-wrapper — drop it" claim is withdrawn                                                                                                                                                                    | npm registry, re-read 2026-09-07 (ledger F22)                                                                                |
+| DoHardThings runs the **proven** stack in production against the real claude.ai connector, iOS included: `mcp-handler` **1.1.0** + `@modelcontextprotocol/sdk` **1.29.0** (installed versions, not the caret ranges), mounted at `app/api/mcp/[transport]/route.ts` via `createMcpHandler` with `basePath: '/api/mcp'` — so the endpoint claude.ai is given is `/api/mcp/mcp`. Trap: `mcp-handler@1.1.0`'s peer pins the SDK at exactly 1.26.0, so DHT's 1.29.0 is an unmet peer that happens to work. Pin what DHT has installed, never the peer range | `DoHardThings/package.json`, `app/api/mcp/[transport]/route.ts:1-40`                                                         |
+| **zod v4 is required.** zod 3 registers fine then explodes at `tools/list` — invisible until claude.ai first talks to the server. DHT pins `zod@^4.4.3` and imports `import { z } from 'zod'`: with zod 4 installed the root export **is** v4, so no `zod/v4` subpath is needed. The `npm ls zod` CI gate is what keeps a transitive 3.x out, at zero cost                                                                                                                                                                                              | `DoHardThings/package.json:42`, `lib/mcp-tools.ts:2`                                                                         |
+| Stateless is the only mode: the 2026-07-28 spec revision removed `Mcp-Session-Id` entirely, and claude.ai is still a 2025-era client (`SUPPORTED_PROTOCOL_VERSIONS` tops at 2025-11-25). `mcp-handler@1.1.0` is stateless by default — Redis is needed only for SSE session resumability, which we do not use. v2's dual-era `legacy` option is a post-race concern, not a v1 problem                                                                                                                                                                   | Anthropic connector docs; `DoHardThings/app/api/mcp/[transport]/route.ts:6-8`                                                |
+| **DHT security trap CONFIRMED:** `app/api/mcp/oauth/authorize/route.ts:42-57` mints an authorization code for **any** email completing Google sign-in. No allowlist, and no `signIn` callback in `lib/auth.ts:26-28`. `friends.json` is display-only                                                                                                                                                                                                                                                                                                    | read directly on `origin/main`                                                                                               |
+| DHT tool handlers **do not know who is calling** — the OAuth subject is verified at the gate then discarded; handlers call `mcpActorEmail()`, a static env var                                                                                                                                                                                                                                                                                                                                                                                          | `lib/mcp-create.ts:53-55`                                                                                                    |
+| DHT tool results are text-only, and handlers **never throw**: `ok()` / `fail()` / `reason()` map a `ZodError` to field-level guidance (`date: Invalid`, not a stack trace)                                                                                                                                                                                                                                                                                                                                                                              | `lib/mcp-tools.ts:52-74`                                                                                                     |
+| DHT `inputSchema` is a **plain object of zod validators, not a wrapping `z.object()`** — the most common porting mistake                                                                                                                                                                                                                                                                                                                                                                                                                                | `lib/mcp-tools.ts:112-132`                                                                                                   |
+| DHT genuinely has **no database** (`DATABASE_URL` deliberately removed). Google Calendar is the event store; Upstash Redis holds structured records; Vercel Blob holds images                                                                                                                                                                                                                                                                                                                                                                           | `DoHardThings/CLAUDE.md:101`, `lib/*-store.ts`                                                                               |
+| DHT's store seam — `*-types.ts` (interface, zero imports) / `*-memory.ts` / `*-real.ts` / factory with a `configured()` predicate — is the testability pattern to copy                                                                                                                                                                                                                                                                                                                                                                                  | `lib/push-store.ts`                                                                                                          |
+| Vercel's Neon recommendation **reversed**: with Fluid compute it is now plain `pg` Pool + `attachDatabasePool()` over TCP to the `-pooler` host, **not** the Neon HTTP driver. Most search results still say otherwise                                                                                                                                                                                                                                                                                                                                  | Neon/Vercel docs, 2026-08                                                                                                    |
+| Append-only needs **two** binding layers: privilege revoke binds the app role (SQLSTATE 42501) but is void against the owner, who can re-grant to itself; an `ENABLE ALWAYS BEFORE UPDATE OR DELETE` trigger binds the owner (23001). **Rules and RLS fail silently** — verified: a rule reported `UPDATE 0` and left the row intact                                                                                                                                                                                                                    | executed on PostgreSQL 18.6                                                                                                  |
+| Prisma's drift remedy is `migrate reset`, which drops and recreates — **verified to destroy triggers and ACLs**. Drizzle's "the SQL file is the migration" model keeps guards inside the migration chain                                                                                                                                                                                                                                                                                                                                                | verified                                                                                                                     |
+| Drizzle 1.0 has been in RC since May 2026 and still is not GA; `0.45.2` is what you actually pin                                                                                                                                                                                                                                                                                                                                                                                                                                                        | npm, 2026-08-16                                                                                                              |
+| **No validated two-component cardio/musculoskeletal stress score exists in the literature.** Closest commercial: Polar Training Load Pro (Cardio Load = TRIMP, Muscle Load = mechanical kJ). Closest science: differential RPE, which validates a _perceptual_ split, not a computed one                                                                                                                                                                                                                                                                | literature review                                                                                                            |
+| **No published coefficient converts descent metres into muscle-damage load.** The effect is qualitatively certain (CK, MVC loss, DOMS rise while metabolic cost falls) but every number is a calibration knob                                                                                                                                                                                                                                                                                                                                           | Minetti; EIMD literature                                                                                                     |
+| ACWR has been statistically dismantled — Lolli 2019 (mathematical coupling / spurious correlation), Impellizzeri 2020 (acute-to-_random_ predicts injury as well as acute-to-chronic)                                                                                                                                                                                                                                                                                                                                                                   | published critique                                                                                                           |
+| Raw Foster sRPE is ~180–360 AU/hour while TSS is ~100/hour. Mixing them in one EWMA would **triple ATL** on a week of missing HR data and fake an overreaching alarm                                                                                                                                                                                                                                                                                                                                                                                    | units analysis                                                                                                               |
+| ATL/CTL 7/42-day EWMA is a **vendor convention** (TrainingPeaks), not a finding. Hellard showed individual time constants are non-identifiable (tau correlation 0.99) — do not fit them                                                                                                                                                                                                                                                                                                                                                                 | literature                                                                                                                   |
+| **Watch is a Fenix 8** (confirmed 2026-08-18). Top tier: HRV status + baseline band, Body Battery, sleep staging, sleep score, Training Readiness, Training Status, native running dynamics. Every overnight metric gated on being **worn asleep**, not on the model                                                                                                                                                                                                                                                                                    | Garmin support tiering; research rated device lists only _medium_ confidence — they are the least stable thing in the report |
+| Garmin exposes a **real acute/chronic pair**: `get_training_status()` → `acuteTrainingLoadDTO.dailyTrainingLoadAcute` / `dailyTrainingLoadChronic` / `dailyAcuteChronicWorkloadRatio`; and `get_training_readiness()` → score 1–100, level, and five weighted factors                                                                                                                                                                                                                                                                                   | `garminconnect/__init__.py:2213-2219`, typed.py                                                                              |
+| HRV comes back in **all shapes at once**: `hrvSummary.lastNightAvg`, `.weeklyAvg` (7-day), `.status` enum, `.baseline` band, plus raw ~5-minute overnight readings                                                                                                                                                                                                                                                                                                                                                                                      | `garminconnect/__init__.py:2027-2046`, typed.py `HrvData`                                                                    |
+| `python-garminconnect` **no longer depends on `garth`** as of 0.3.11. Every third-party guide documenting `garth.dumps()` / `GARMINTOKENS_BASE64` is stale                                                                                                                                                                                                                                                                                                                                                                                              | pyproject.toml + PyPI, read 2026-08-18                                                                                       |
+| `Garmin.login()` accepts an **inline JSON token string** (`_looks_like_json()` → `client.loads()`), so no filesystem is needed. **But in that mode it never writes rotated tokens back** — every `client.dump()` is gated on `tokenstore_path is not None`, while `_refresh_di_token()` does rotate. The caller must persist `client.dumps()` after every login                                                                                                                                                                                         | `garminconnect/__init__.py:182-192,739-749,772-781`                                                                          |
+| **429 lockout is keyed per-account** (clientId + email), empirically inescapable by changing IP or headers, lasting 48–72+ hours with no recovery process                                                                                                                                                                                                                                                                                                                                                                                               | issue #344                                                                                                                   |
+| No official route for one person: Developer Program is business-use-only and its request form has been a "System Maintenance" block since 2026-03-25                                                                                                                                                                                                                                                                                                                                                                                                    | verified live 2026-08-18                                                                                                     |
+| intervals.icu holds **genuine Garmin partner OAuth** (connecting shows Garmin's own consent screen) and issues a self-serve personal API key. **But its wellness field coverage is UNVERIFIED** — the claim rests on an undated third-party guide plus forum threads, and a 2026-05-19 bug report shows partial syncs (sleep arriving; RHR, HRV, steps, body battery missing)                                                                                                                                                                           | research, explicitly hedged                                                                                                  |
+| Vercel Hobby cron: **1×/day, ±59 min, never retried, best-effort** — runs can be missed with no log produced                                                                                                                                                                                                                                                                                                                                                                                                                                            | Vercel docs                                                                                                                  |
 
 ### Data flow (target state, M1)
 
 ```
 Claude (phone / Claude Code)
-   └─ MCP tools ──▶ /api/mcp  (SDK v2, stateless, bearer OR OAuth JWT)
+   └─ MCP tools ──▶ /api/mcp/[transport]  (mcp-handler 1.1.0 + sdk 1.29.0, stateless, bearer)
                        │
                        ├─ tool layer   (zod v4 in, ok()/fail() out, never throws)
                        └─ domain core  (pure functions, no I/O, no Next imports)
@@ -86,14 +107,14 @@ Claude (phone / Claude Code)
 
 ### External dependencies
 
-| Dependency                               | Stability                                                     | Constraint                                                                                                                                                               | Fallback                                                                    |
-| ---------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| Neon Postgres                            | Stable                                                        | Free tier; **history retention defaults to a plan-dependent window, 30-day ceiling** — set it explicitly, this is the highest-value config change for irreplaceable data | none needed                                                                 |
-| `@modelcontextprotocol/server@2`         | New major, days-to-weeks old                                  | v2 renames; docs still mostly show v1                                                                                                                                    | pin exact; v1 + mcp-handler is the retreat                                  |
-| `drizzle-orm@0.45.2`                     | 0.x, 1.0 in RC 4 months                                       | 1.0 may ship mid-block                                                                                                                                                   | pin **exact**, no caret; treat 1.0 as a scheduled task                      |
-| claude.ai connector                      | Stable but opaque                                             | Requires OAuth; rejects static tokens                                                                                                                                    | Claude Code with a static bearer keeps working                              |
-| Garmin source (bridge or direct library) | Bridge unverified; library healthy (0.3.10, zero open issues) | Probe decides before schema design. **Never retry against auth** — 429 is per-account, 48–72h                                                                            | Manual FIT download from Connect web UI; RPE floor keeps the engine running |
-| DoHardThings / routr                     | —                                                             | **Out of scope for M1**                                                                                                                                                  | n/a                                                                         |
+| Dependency                               | Stability                                                     | Constraint                                                                                                                                                               | Fallback                                                                                                                         |
+| ---------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| Neon Postgres                            | Stable                                                        | Free tier; **history retention defaults to a plan-dependent window, 30-day ceiling** — set it explicitly, this is the highest-value config change for irreplaceable data | none needed                                                                                                                      |
+| `mcp-handler@1.1.0` + `sdk@1.29.0`       | Proven in production on this account                          | Both v1 majors and maintained (sdk 1.30.0 shipped 2026-07-27). `mcp-handler@1.1.0` peer-pins sdk 1.26.0; 1.29.0 is an unmet peer DHT runs anyway                         | pin **exact**, both. The retreat points forward: revisit `mcp-handler@2.1.1` + `@modelcontextprotocol/server@2` after 2026-10-24 |
+| `drizzle-orm@0.45.2`                     | 0.x, 1.0 in RC 4 months                                       | 1.0 may ship mid-block                                                                                                                                                   | pin **exact**, no caret; treat 1.0 as a scheduled task                                                                           |
+| claude.ai connector                      | Stable but opaque                                             | Requires OAuth; rejects static tokens                                                                                                                                    | Claude Code with a static bearer keeps working                                                                                   |
+| Garmin source (bridge or direct library) | Bridge unverified; library healthy (0.3.10, zero open issues) | Probe decides before schema design. **Never retry against auth** — 429 is per-account, 48–72h                                                                            | Manual FIT download from Connect web UI; RPE floor keeps the engine running                                                      |
+| DoHardThings / routr                     | —                                                             | **Out of scope for M1**                                                                                                                                                  | n/a                                                                                                                              |
 
 ### Previous incidents and reviews informing this plan
 
@@ -116,10 +137,47 @@ routr's `PLAN-2026-004` paranoid pass produced findings that transfer directly: 
 
 ### The MVP, and what is deliberately deferred
 
+**Scope is option A, ratified by Luis on 2026-09-07.** What follows was written on 2026-08-16 against 48 days and ten
+stages. It is now 47 days to 2026-10-24 and the ratified scope is a thin working coach, not the ten-stage build. Everything
+option A cuts is struck in place below and carried in the **Deferred-Items Register** at the end of Phase 2, with a
+classification, a named owner and a re-ratification date. A deferral that lives only in a chat decision and not in the plan
+file is a deferral the next agent reading the plan will build anyway.
+
 **MVP: a persistent, phone-accessible training plan that auto-ingests Garmin activities and pushes back when Luis breaks his own rules.**
 
-That is Stages 0–7. Stages 8–9 are the load modelling, and they are an upgrade to a system already in daily use rather than a
-precondition for it — which is the reordering recorded in `docs/decisions.md` (2026-08-18).
+**Pre-race running order: 0 → 1 (delivered) → 2 → 3 → 3b → 4 → 6 → 7 → 10.** Stage 5 (OAuth 2.1) moves behind the planner
+and the check-in loop and out of the pre-race path entirely (ledger F23, F30); Stages 8 and 9 remain after it. Stage numbers
+are identities referenced from `tasks/*.md`, `docs/ci-gates.md` and both review documents, so nothing is renumbered — the
+order changed, the names did not.
+
+**What "a strong foundation" means here**, restated against the definition the 2026-09-07 ledger settled (F31), because the
+standing instruction "the MVP must accommodate ALL data" has been read as a mandate for guard depth and auth ceremony and is
+neither — it is a **capture** requirement, and one `jsonb` column satisfies it:
+
+| Pillar                                     | What it is                                                                                                                                                                                                   | Where it stands                                                                                                                                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| (a) The data model                         | Append-only history, provenance columns, notes                                                                                                                                                               | Five tables delivered in `9153fde`; provenance columns land at Stage 3b, the mutable `notes` table and `rocket_add_note` at Stages 6–7                                                                                         |
+| (b) Thresholds and rules as **cited data** | Every guardrail carries a stable string id and its citation, emitted as `applied_rules[]` / `violated_rules[]` on every write result                                                                         | **The only unstarted pillar.** Grepping `docs/`, `config/` and `src/` for `applied_rules`, `rules table`, `rules registry` or `citation` returns zero hits. Folded into the write-tool contract, not run as its own workstream |
+| (c) The deterministic planner              | Sole writer of session and week rows; every write returns `{applied, violated_rules[], compliant_alternative, resulting_window}`, validated over the **whole** rolling window rather than the single session | Stages 6–7. The contract is spec text and a return type, authored before the first tool exists                                                                                                                                 |
+| (d) Degrade gracefully, proven by tests    | The RPE floor is always computable; objective terms drop out and weights renormalise; `warmingUp` is never presented as authoritative                                                                        | Shape stated in the Garmin degradation path below; the tests land with Stages 4, 7 and 9                                                                                                                                       |
+| (e) Lossless capture of upstream payloads  | Everything upstream returns is kept — typed columns for what we query, the whole payload in `raw` so a field we did not think to type is neither lost nor needs re-ingesting                                 | Delivered: `src/db/schema.ts:16-22`, `raw: jsonb`, with one **measured** exception — per-second streams at 587,968 bytes against a 0.5 GB tier, held as `streams_ref`                                                          |
+
+Guard depth, the auth server and the SDK major are **not** on that list. The DB guards shipped correctly and cheaply and are
+done; the auth server is deferred; the SDK question is answered by reuse. The weakest part of the foundation is (b) — the part
+nobody has started, not the part someone over-built.
+
+**The dated gate that decides whether this repeats the first attempt (ledger F32).** `~/dev/marathonApp` (2026-03-28) was the
+previous block's tool: 137 lines of static plan data behind completion toggles, with a run log and session notes. Rocket's
+home page today imports `src/data/recent-activities.json` and its own footer says "not live yet … a snapshot taken on
+2026-09-06". On that one dimension rocket is currently **less** than marathonApp. The difference this time has to be that the
+plan adapts, and the honest test of that is not "reads from Postgres" but "accepts a write", because
+`docs/specs/00-overview.md:19` makes the subjective check-in a first-class signal shipped before any API integration:
+
+> **By 2026-09-14** (`CHECK_IN_GATES[0].afterWeekMonday`): `src/data/recent-activities.json` is **deleted**, and
+> `src/app/page.tsx` both reads activities from Postgres **and** accepts a check-in write. If that date passes with the JSON
+> snapshot still wired in, F32 is proven — scope gets cut further rather than defended.
+
+That is a date and a `git rm`, so it can be checked rather than nodded at.
 
 **Deferred hardest: the two-component cardio/musculoskeletal load model.** It is the weakest bet in the project, and naming
 that plainly is the point of this paragraph:
@@ -145,10 +203,10 @@ which is the only honest way to make it.
 1. **M1 boundary** → **the phone**. OAuth 2.1 is in scope (Stage 5). Ratified 2026-08-16.
 2. **Run-commuting** → **no** — not feasible (sweat, no facilities). Design instruction carried forward: _"focus on the framework so this will support varying training"_ — availability and session placement stay fully data-driven, with no slot shape baked into the planner.
 
-### Open questions — still open (do not block Stages 0–5)
+### Open questions — still open (do not block Stages 0–4)
 
 3. **The returning-from-rest ramp rule.** Week 2 goes 20 → 40 km against a 30 km pre-rest baseline: +33%, over the +15% cap either way. `GUARDRAILS.returningFromRestRampCapPct` is a placeholder at 35. Needed before Stage 6 (guardrail enforcement).
-4. **How musculoskeletal load enters readiness.** The specs mandate two components, then define readiness without one, and `07-wiring-todo.md:23` says "total-load only", contradicting the design. Needed before Stage 9. **My recommendation**, for ratification: musculoskeletal TSB gates _quality_ sessions only; cardio TSB drives the overall green/amber/red. That preserves the swim-continues-through-recovery behaviour the spec explicitly wants, without inventing a blended score.
+4. **How musculoskeletal load enters readiness.** The specs mandate two components, then define readiness without one, and `07-wiring-todo.md:23` says "total-load only", contradicting the design. Needed before Stage 9. **The recommendation that stood on this line is withdrawn (2026-09-07, ledger F14).** It read "musculoskeletal TSB gates _quality_ sessions only; cardio TSB drives the overall green/amber/red" — which is TSB gating a session on its own, queued for a signature that would have contradicted `CHECK_IN_GATES`' own refusal to gate on an acute:chronic figure and made that paragraph decoration. The criticism that bites is not Impellizzeri's mathematical coupling (a difference is not a ratio) but Hellard 2006 and Vermeire 2022: the 7/42 constants are nominal conventions, non-identifiable, and they shift with the load metric, so the number has no calibrated meaning to threshold against — which applies to a difference exactly as to a ratio. **Musculoskeletal load is a trend display.** Quality is gated by the soreness gate (`READINESS.sorenessBlocksQuality`, currently 3) and the readiness verdict, never by a TSB threshold. What stays open is only how the component is displayed, and that cannot be answered until the component exists.
 5. **CTL seeding.** History starts 2026-07-05, so CTL has under one time constant until roughly mid-September. Practitioners either backfill months of data or hand-seed CTL and ignore the first ~6 weeks. **Recommendation**: hand-seed CTL from the stated ~30 km/week baseline and have every verdict carry an explicit `warmingUp` flag until 42 days of history exist (REDLINES rule 4). Needed before Stage 9.
 
 ### Volume feasibility without run-commuting — the arithmetic
@@ -165,19 +223,19 @@ The spec calls run-commutes "the biggest lever for fitting 60 km around five swi
 
 ### Assumptions
 
-| #   | Assumption                                                                                | Confidence                       | How to verify                                                                                                  | Fallback if wrong                                                                          |
-| --- | ----------------------------------------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 1   | SDK v2 `createMcpHandler` works inside a Next 16 App Router route on Vercel               | Med-High                         | **Stage 0 spike, before any code**                                                                             | `mcp-handler@2.1.1`, or SDK v1 as DHT uses                                                 |
-| 2   | claude.ai adds a connector against an SDK-v2 stateless server                             | Med                              | Stage 5, on the real deployment                                                                                | Keep Claude Code path working; fall back to DHT's exact v1 shape                           |
-| 3   | An `ENABLE ALWAYS` trigger blocks the owner on **Neon** as it does on stock Postgres 18.6 | Med                              | **Stage 0 spike against a real Neon branch** — Neon's role model differs (`neon_superuser`, no true superuser) | Rely on the role-grant layer plus a CI assertion; document the gap in the ledger           |
-| 4   | `pg` Pool + `attachDatabasePool()` is right for Neon on Fluid compute                     | Med                              | Stage 1; monitor Neon connection count after week 1                                                            | Neon HTTP driver, accepting loss of interactive transactions                               |
-| 5   | Drizzle 1.0 does not GA mid-block, or upgrades cleanly                                    | Low-Med                          | Watch the `rc` tag                                                                                             | Pin exact versions; defer the upgrade past the race                                        |
-| 6   | Four weekday morning runs are sustainable                                                 | Low — behavioural, not technical | Weeks 3–4 of real use                                                                                          | Macro targets get revised down; the planner must surface the shortfall rather than hide it |
-| 7   | A hand-seeded CTL produces sane readiness in weeks 1–4                                    | Low                              | Stage 9 against the real July–August activity history                                                          | `warmingUp` flag suppresses the verdict entirely rather than showing a misleading amber    |
+| #   | Assumption                                                                                  | Confidence                       | How to verify                                                                                                                                                        | Fallback if wrong                                                                                                 |
+| --- | ------------------------------------------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 1   | `mcp-handler@1.1.0` + `sdk@1.29.0` work inside a **Next 16.3.1** App Router route on Vercel | Med-High                         | Stage 4 itself. DHT proves the stack in production but on **Next 15.5.18**, so the Next major is the only untested variable — a spike would re-prove the proven half | `mcp-handler@2.1.1` + `@modelcontextprotocol/server@2`, accepting the `z.object()` input-schema rewrite v2 forces |
+| 2   | claude.ai adds a connector against an SDK-v2 stateless server                               | Med                              | Stage 5, on the real deployment                                                                                                                                      | Keep Claude Code path working; fall back to DHT's exact v1 shape                                                  |
+| 3   | An `ENABLE ALWAYS` trigger blocks the owner on **Neon** as it does on stock Postgres 18.6   | Med                              | **Stage 0 spike against a real Neon branch** — Neon's role model differs (`neon_superuser`, no true superuser)                                                       | Rely on the role-grant layer plus a CI assertion; document the gap in the ledger                                  |
+| 4   | `pg` Pool + `attachDatabasePool()` is right for Neon on Fluid compute                       | Med                              | Stage 1; monitor Neon connection count after week 1                                                                                                                  | Neon HTTP driver, accepting loss of interactive transactions                                                      |
+| 5   | Drizzle 1.0 does not GA mid-block, or upgrades cleanly                                      | Low-Med                          | Watch the `rc` tag                                                                                                                                                   | Pin exact versions; defer the upgrade past the race                                                               |
+| 6   | Four weekday morning runs are sustainable                                                   | Low — behavioural, not technical | Weeks 3–4 of real use                                                                                                                                                | Macro targets get revised down; the planner must surface the shortfall rather than hide it                        |
+| 7   | A hand-seeded CTL produces sane readiness in weeks 1–4                                      | Low                              | Stage 9 against the real July–August activity history                                                                                                                | `warmingUp` flag suppresses the verdict entirely rather than showing a misleading amber                           |
 
 ### Pre-mortem
 
-1. **The engine is beautiful and he never talks to it.** The most likely failure by far. Mitigated by ordering: Stages 0–5 deliver a phone-usable coach, Stages 6–7 add the guardrails and negotiation that make it a coach rather than a spreadsheet, and only then do Stages 8–9 build the load modelling.
+1. **The engine is beautiful and he never talks to it.** The most likely failure by far. Mitigated by ordering: Stage 4 delivers a bearer-gated coach usable from Claude Code, Stages 6–7 add the guardrails and negotiation that make it a coach rather than a spreadsheet, and only then does auth plumbing (Stage 5) or load modelling (Stages 8–9) land. **Reordered 2026-09-07 (ledger F23)**: nothing about the OAuth port gets harder by waiting, and it is the only stage whose output is zero coaching. The cost is named rather than hidden — see the phone-access note under Stage 5.
 2. **The two-component model is invented and produces nonsense.** No literature validates a computed cardio/MSK split. Mitigated by building MSK as **mechanical work in joules** — dimensionally honest, computable from mass + GPS — rather than a second invented 0–100 score, and by keeping every coefficient a named calibration knob.
 3. **Units discontinuity fakes an alarm.** Foster sRPE at ~180–360 AU/h versus TSS at ~100/h would triple ATL on an HR-less week. Mitigated by anchoring all three cascade tiers to one currency: _one hour at threshold = 100_.
 4. **Elevation double-counted.** Ascent is already inside HR and inside grade-adjusted pace. Mitigated by applying the descent multiplier **only** when the cardio score came from the pace tier, with an explicit test.
@@ -204,7 +262,7 @@ The spec calls run-commutes "the biggest lever for fitting 60 km around five swi
 - Two-layer planner: macro weekly targets seeded from `06-training-block.md`; micro rolling 7–10 day window placed against availability; hard guardrails that negotiate.
 - Replan: all five triggers, returning a diff plus plain-language rationale (Loops A and B).
 - MCP surface: `get_status`, `get_week`, `daily_checkin`, `log_activity`, `replan`, `adjust_session`, `set_availability`, `get_calendar`, `get_load_history`.
-- Dual auth: static bearer (Claude Code) and OAuth 2.1 with an owner allowlist (phone).
+- Auth: static bearer (Claude Code) at Stage 4. **OAuth 2.1 with an owner allowlist is struck from the pre-race path by option A** — see Stage 5, now after Stage 7, and the Deferred-Items Register.
 - Seed data for the Battersea block and the four known races.
 
 **Out of scope** — each tracked as a `NOT IMPLEMENTED` row in `docs/ci-gates.md` or a milestone in `07-wiring-todo.md`
@@ -258,21 +316,26 @@ Two viable sources. The probe in Stage 0 decides, by reading a real payload rath
 
 ### Stage 0 — De-risk spikes (no production code)
 
-**Goal**: Prove the two externally-unknowable things before building on them.
-**Why**: Assumption 1 (SDK v2 in a Next route) and Assumption 3 (`ENABLE ALWAYS` triggers on Neon specifically) each invalidate a whole stage if false. routr's plan learned this the expensive way by testing its tunnel at Stage 8 instead of Stage 0.
+**Goal**: Prove the one externally-unknowable thing, and start the two that have a human turnaround.
+**Why**: Assumption 3 (`ENABLE ALWAYS` triggers on **Neon** specifically, whose role model differs from stock Postgres) invalidates a whole stage if false. routr's plan learned this the expensive way by testing its tunnel at Stage 8 instead of Stage 0. The Garmin items are here because they wait on Luis and on a 24–48h Garmin turnaround, not because they are risky.
 **Depends on**: —
 **Files**: `spikes/` (deleted at the end), plan updated with recorded results.
+**Budget**: 2 h of agent time plus ~30 min of Luis's. **Cut line**: if the Neon spike has not run by **2026-09-09**, ship on the role-grant layer alone, note the unverified owner-path in `docs/ci-gates.md`, and move on — it is a recorded gap, not a blocker.
+
+**Deleted 2026-09-07 (ledger F22).** Two spikes that were here are gone: the SDK v2 spike and the zod-3 probe. DoHardThings
+proves `mcp-handler@1.1.0` + `@modelcontextprotocol/sdk@1.29.0` in production against the real claude.ai connector on this
+account, so the SDK spike would have re-proved the proven half while leaving the only untested variable (Next 16 rather than
+DHT's Next 15.5.18) to Stage 4 regardless; and the `npm ls zod` CI gate at Stage 4 covers the zod-3 risk at zero cost, which
+a probe does not.
 
 **Approach**:
 
-1. **SDK v2 spike.** Install `@modelcontextprotocol/server@^2.0.0`, `@modelcontextprotocol/client@^2.0.0`, `zod@^4.2.0`. One route, one tool. Drive `initialize` → `tools/list` → `tools/call` through the route's own fetch handler using a real `Client` with a custom `fetch`. Assert: the tool round-trips; an unauthenticated call returns 401 with `WWW-Authenticate: … resource_metadata="…"`; `getOAuthProtectedResourceMetadataUrl(new URL('https://x/api/mcp'))` yields the **path-suffixed** `/.well-known/oauth-protected-resource/api/mcp`. Import gotcha to confirm: both transports come from the package **root** — `@modelcontextprotocol/client/streamableHttp` does not exist.
-2. **Neon append-only spike.** On a throwaway Neon branch: create a table, create the `app_rw` role with `SELECT, INSERT` only, add an `ENABLE ALWAYS BEFORE UPDATE OR DELETE` trigger raising `restrict_violation`, then attempt `UPDATE` and `DELETE` **as the table owner** and **as `app_rw`**. Record the SQLSTATEs. This is the one behaviour verified only on stock Postgres 18.6, and Neon's role model differs.
-3. **zod-3 probe.** Confirm the failure mode: register a tool with a zod 3 schema and observe `tools/list` explode while registration succeeds silently.
-4. **Garmin source probe (Luis's hands, ~30 min).** Connect Garmin → intervals.icu, wait one sync cycle, then `curl` the wellness endpoint for the last 7 days and **read the actual payload**. This is a go/no-go, not a formality — see Decision gate G1. Do not design the activity or wellness schema before it returns.
-5. **Request the Garmin bulk export (Luis, 2 min + 24–48h wait).** Connect web → Account Settings → Export Your Data. Free, sanctioned, and the only complete-history source. It has a multi-day turnaround, so requesting it at Stage 0 removes it from the critical path at Stage 3b.
+1. **Neon append-only spike.** On a throwaway Neon branch: create a table, create the `app_rw` role with `SELECT, INSERT` only, add an `ENABLE ALWAYS BEFORE UPDATE OR DELETE` trigger raising `restrict_violation`, then attempt `UPDATE` and `DELETE` **as the table owner** and **as `app_rw`**. Record the SQLSTATEs. This is the one behaviour verified only on stock Postgres 18.6, and Neon's role model differs.
+2. **Garmin source probe (Luis's hands, ~30 min).** Connect Garmin → intervals.icu, wait one sync cycle, then `curl` the wellness endpoint for the last 7 days and **read the actual payload**. This is a go/no-go, not a formality — see Decision gate G1. Do not design the activity or wellness schema before it returns.
+3. **Request the Garmin bulk export (Luis, 2 min + 24–48h wait).** Connect web → Account Settings → Export Your Data. Free, sanctioned, and the only complete-history source. It has a multi-day turnaround, so requesting it at Stage 0 removes it from the critical path at Stage 3b.
 
 **Observability**: none — spike.
-**TDD**: the artifact is recorded evidence in this file. Gate: spike 2 must show a _non-zero_ SQLSTATE for all four attempts, or Assumption 3 is false and Stage 1 changes.
+**TDD**: the artifact is recorded evidence in this file. Gate: spike 1 must show a _non-zero_ SQLSTATE for all four attempts, or Assumption 3 is false and Stage 1 changes.
 **Risks**: if the owner can bypass the trigger on Neon, append-only rests on the role grant alone — survivable, but it must be written down rather than assumed. The Garmin probe risks nothing: it reads a third-party API with a personal key and never touches Garmin auth.
 **Rollback**: delete `spikes/`, drop the Neon branch.
 **Status**: [ ] Not Started
@@ -284,7 +347,18 @@ Two viable sources. The probe in Stage 0 decides, by reading a real payload rath
 **Goal**: The five tables the MVP needs exist as a typed Drizzle schema on Neon, and the two history tables physically reject `UPDATE`/`DELETE`.
 **Why**: REDLINES rule 2, and everything downstream reads and writes through it. Getting the store decision wrong here means the migration touches the engine, the planner, every tool and every test.
 **Depends on**: Stage 0.
-**Files**: `db/schema.ts`, `db/client.ts`, `db/migrations/0000_init/`, `db/migrations/0001_append_only_guards/` (custom SQL), `drizzle.config.ts`, `vitest.integration.setup.ts`, `db/schema.test.ts`.
+**Files as planned**: `db/schema.ts`, `db/client.ts`, `db/migrations/0000_init/`, `db/migrations/0001_append_only_guards/` (custom SQL), `drizzle.config.ts`, `vitest.integration.setup.ts`, `db/schema.test.ts`.
+**Files as delivered**: the same set under `src/db/` — `src/db/schema.ts` (222), `src/db/client.ts` (73), `src/db/ingest-schema.ts` (83), `src/db/migrations/0000_init.sql` (103), `src/db/migrations/0001_append_only_guards.sql` (110).
+
+**DELIVERED at option-A depth in `9153fde` (ledger F30).** Read this section as a record, not as work. What landed is exactly
+option A's cut of it: five tables, **one** grant layer plus `ENABLE ALWAYS` row triggers and two statement-level TRUNCATE
+triggers, and the `sql_drop` event trigger below **explicitly rejected with reasoning** at
+`src/db/migrations/0001_append_only_guards.sql:30-37` rather than skipped silently. The two-layer construction is not guard
+depth for its own sake: the privilege revoke is void against the table owner, who can re-grant to itself, so the
+`ENABLE ALWAYS` trigger is the layer that binds the other actor, and the TRUNCATE triggers exist because owner TRUNCATE was
+observed to succeed on Neon PG 18.6 until they were added. Still outstanding from this stage: `9153fde`'s own commit body
+records that the layer is **not yet exercised against the live database**, so the SQLSTATE assertions below are authored
+against a real Postgres at Stage 3, not claimed here.
 
 **Approach**:
 
@@ -324,7 +398,7 @@ A `globalSetup` **throws** when `DATABASE_URL` is absent — a `skipIf` at descr
 **Post-stage**: `security-reviewer-fullstack` (mandatory), `database-reviewer`, `code-reviewer`.
 **Risks**: the event trigger blocks legitimate teardown including local resets — the escape hatch must be documented in the same commit. The name-list is a maintenance trap; prefer protecting a dedicated schema, or add a CI assertion that every append-only table is listed.
 **Rollback**: drop the Neon branch and re-migrate. **Point of no return once real training data lands** — see Holistic Rollback.
-**Status**: [ ] Not Started
+**Status**: [x] Delivered in `9153fde` at option-A depth; live-database verification of the SQLSTATEs still owed.
 
 ---
 
@@ -334,6 +408,7 @@ A `globalSetup` **throws** when `DATABASE_URL` is absent — a `skipIf` at descr
 **Why**: Tier 3 is the always-computable floor (`02-load-engine.md:7`) and it is all a manual log can produce. Everything else is an upgrade to it.
 **Depends on**: Stage 1.
 **Files**: `domain/types.ts`, `domain/stress.ts`, `domain/stress.test.ts`.
+**Budget**: 3 h. **Cut line**: if not done by **2026-09-09**, ship the RPE floor and the currency anchor test alone and drop the branded types — they buy compile-time safety on a component (musculoskeletal joules) that option A has deferred past the race anyway.
 
 **Approach**:
 
@@ -361,13 +436,28 @@ it('refuses to add a cardio score to musculoskeletal joules', ...); // type-leve
 
 ### Stage 3 — Store seam and the first two writes
 
-**Goal**: `logActivity` and `recordCheckIn` persist through the seam, with an in-memory implementation for tests.
+**Goal**: `logActivity` and `recordCheckIn` persist to Postgres through the seam.
 **Depends on**: Stages 1–2.
-**Files**: `store/types.ts`, `store/memory.ts`, `store/drizzle.ts`, `store/index.ts`, `store/store.test.ts`.
+**Files**: `store/types.ts`, `store/drizzle.ts`, `store/index.ts`, `store/store.test.ts`.
+**Budget**: 3 h. **Cut line**: if not done by **2026-09-10**, drop the seam entirely and have the tool layer call Drizzle directly — the seam is a testability convenience, not a foundation pillar, and Stage 4 is what the clock is for.
 
-**Approach**: DHT's four-file seam verbatim. Reads return copies. `storeConfigured()` lets callers 503 rather than throw. The same contract test suite runs against **both** implementations, so the memory store cannot drift from the real one.
+**STRUCK by option A (ledger F30): the second store implementation and the two-store contract suite.** As planned this stage
+was DHT's four-file seam — `types.ts` / `memory.ts` / `drizzle.ts` / factory — with one contract suite parameterised over both
+implementations so the memory store could not drift from the real one. Under option A there is **one** implementation. The
+interface file stays, because it costs a type and it is what a second implementation would later be written against; the
+in-memory store and the parameterised suite do not, and are carried in the Deferred-Items Register.
+
+The reason this is safe rather than merely cheaper: the drift the contract suite guards against cannot occur when there is
+nothing to drift from, and the integration `globalSetup` **throws** on a missing `DATABASE_URL`, so store tests against real
+Postgres cannot silently become vacuous the way a `skipIf` would. The cost is honest and worth naming — store tests now
+require a database, so they are slower and they cannot run in a context that has none.
+
+**Approach**: DHT's seam minus the second implementation. `store/types.ts` is the interface with zero imports;
+`store/drizzle.ts` carries `import "server-only"`; `store/index.ts` is a small factory exposing `storeConfigured()` so callers
+503 rather than throw. Reads return copies.
 **Observability**: `activity_logged rpe=%d duration_min=%d source=manual`.
-**TDD — RED**: one shared contract suite parameterised over `[memoryStore, drizzleStore]`; a test asserting a logged activity cannot be mutated through the seam.
+**TDD — RED**: one suite against the Drizzle store on a real database; a test asserting a logged activity cannot be mutated
+through the seam; a test asserting `storeConfigured()` is false with no `DATABASE_URL`, so the 503 path is armed rather than assumed.
 **Post-stage**: `code-reviewer`.
 **Status**: [ ] Not Started
 
@@ -378,7 +468,12 @@ it('refuses to add a cardio score to musculoskeletal joules', ...); // type-leve
 **Goal**: 42+ days of real activity and wellness history in the store, so the load model is warm before anything trusts it.
 **Why this is urgent, and why it is here rather than in M3**: CTL is a 42-day EWMA. The block started 2026-07-05, so roughly 44 days of history exist — meaning a self-computed chronic average has _almost exactly zero_ warm-up margin. REDLINES rule 4 already forbids presenting a verdict built on less than one time constant as authoritative. The taper decisions, the highest-stakes calls of the block, start landing around **3 October**. The model has to be warm before then, so the import cannot wait for the sync milestone.
 **Depends on**: Stage 3 (store seam). **Independent of Decision gate G1** — the bulk export works under either branch.
-**Files**: `scripts/backfill.ts`, `db/schema.ts` (wellness table + provenance columns), `scripts/backfill.test.ts`.
+**Files**: `scripts/backfill.ts`, `src/db/schema.ts` (wellness table + provenance columns), `scripts/backfill.test.ts`.
+**Budget**: 4 h, gated on the export arriving. **Cut line**: if the export has not arrived by **2026-09-14**, do not wait for it — seed CTL from Garmin's own `dailyTrainingLoadChronic = 287` and `dailyTrainingLoadAcute = 296` (already captured in `tools/garmin_probe/out/training_status.json`), ship with `warmingUp` armed, and run the backfill whenever the archive lands.
+
+**If the bridge is primary, its historical import is expected to cover activities but not wellness** (ledger F21), so the bulk
+export is the only route to 42+ days of **wellness** history and its urgency does not fall when Branch A is chosen. That is
+the opposite of the intuition — picking the easier integration makes this stage more load-bearing, not less.
 
 **Approach**:
 
@@ -409,21 +504,23 @@ it('extracts a chronic-load seed when the export carries one', ...);
 
 ### Stage 4 — MCP server with a static bearer (Claude Code usable)
 
-**Goal**: `/api/mcp` serves `log_activity`, `daily_checkin` and `get_status` over SDK v2, gated by a static bearer. **First end-to-end usable milestone.**
+**Goal**: `/api/mcp/[transport]` serves `log_activity`, `daily_checkin` and `get_status` on the DoHardThings stack, gated by a static bearer. **First end-to-end usable milestone.**
 **Why**: A thin vertical slice beats a deep engine nobody can talk to. The pre-mortem's most likely failure is an unused system.
 **Depends on**: Stage 3.
-**Files**: `app/api/mcp/route.ts`, `mcp/tools.ts`, `mcp/result.ts`, `mcp/tools.test.ts`.
+**Files**: `app/api/mcp/[transport]/route.ts`, `mcp/tools.ts`, `mcp/result.ts`, `mcp/tools.test.ts`.
+**Budget**: 6 h. **Cut line**: if not done by **2026-09-14**, ship the three tools and nothing else — no fourth tool, no polish on the descriptions — because a coach reachable from Claude Code on 14 September beats a better one reachable on the 21st.
 
 **Approach**:
 
 ```ts
-export const runtime = 'nodejs'; // SDK v2 needs Node 20+; edge has a hard 25s TTFB rule
+export const runtime = 'nodejs'; // `pg` needs Node; edge also has a hard 25s TTFB rule
 export const maxDuration = 60;
 ```
 
-- `createMcpHandler(factory)` with **no options** — the default `legacy: 'stateless'` serves both the 2026-07-28 protocol and 2025-era clients from one handler. Never `legacy: 'reject'`: claude.ai is a 2025-era client.
-- The factory builds a **fresh** `McpServer` per call — that is what makes it safe under Fluid instance reuse. No session state in module scope.
-- `inputSchema` as a **plain object of zod validators**, not a wrapping `z.object()`. Every field carries `.describe()` written as instructions aimed at the model — this is the real prompt surface, not a type annotation, and deserves actual writing effort.
+- **Pin the stack DoHardThings actually runs, exactly, no carets: `mcp-handler@1.1.0` + `@modelcontextprotocol/sdk@1.29.0` + `zod@4.x`** (ledger F22, superseding this plan's 2026-08-16 choice of SDK v2). `mcp-handler@1.1.0`'s peer pins the SDK at exactly 1.26.0, so 1.29.0 is an unmet peer — that is DHT's live production combination and it is what to install, not what the peer range asks for. Revisit `mcp-handler@2.1.1` on `@modelcontextprotocol/server@2` **after 2026-10-24**.
+- Copy `DoHardThings/app/api/mcp/[transport]/route.ts` (63 lines, verbatim): `createMcpHandler(initialiser, { serverInfo, capabilities }, { basePath: '/api/mcp', maxDuration: 60, verboseLogs: false })`. `basePath` **must** match the location of the `[transport]` route, which makes the endpoint claude.ai and Claude Code are given `/api/mcp/mcp`. No Redis — that is only needed for SSE session resumability, which we do not use.
+- Register tools inside the initialiser callback. **No session state in module scope**, so the handler is safe under Fluid instance reuse.
+- `inputSchema` as a **plain object of zod validators**, not a wrapping `z.object()`. This is the concrete reason the v1 pin matters rather than a stylistic preference: `mcp-handler`'s v2 migration notes require a complete Standard Schema (`z.object(...)`) instead of raw zod shapes, along with removed variadic registration and a changed handler signature — so on v2 the DHT tool layer does not port verbatim, which was the entire reason for porting it. Every field carries `.describe()` written as instructions aimed at the model; this is the real prompt surface, not a type annotation, and deserves actual writing effort.
 - Copy DHT's `ok()` / `fail()` / `reason()` verbatim (`lib/mcp-tools.ts:52-74`). **Handlers never throw** — a thrown error becomes a transport failure the model cannot recover from, whereas `isError: true` with readable text lets it self-correct. `reason()` maps a `ZodError` to `date: Invalid` rather than a stack trace.
 - Serve the RFC 9728 document at **both** the path-suffixed `/.well-known/oauth-protected-resource/api/mcp` (a literal nested directory in App Router) and the bare path.
 - `npm ls zod` CI gate asserting no transitive 3.x.
@@ -441,41 +538,8 @@ it('never returns a tool result larger than 8 KB', ...);  // context-blowout gua
 
 The 401 test runs **unconditionally** and every positive test first asserts the credential-less variant 401s — otherwise an unarmed gate makes them vacuous (routr's finding).
 **Post-stage**: `security-reviewer-fullstack` (mandatory), `code-reviewer`, `nextjs-developer`. Manual: `claude mcp add --transport http rocket <url> --header "Authorization: Bearer $TOKEN"`, then log a real run.
-**Risks**: SDK v2 is days-to-weeks old; docs mostly show v1. Stage 0 de-risks this.
+**Risks**: the MCP stack itself is de-risked by DHT running it in production against the real connector, iOS included. The one untested variable is **Next 16.3.1** — DHT is on Next 15.5.18 — and it surfaces here rather than in a spike, because a spike could only have tested the same thing one stage earlier at the cost of the whole SDK-v2 detour. If Next 16 breaks `mcp-handler@1.1.0`, the fallback is `mcp-handler@2.1.1` + `@modelcontextprotocol/server@2`, accepting the `z.object()` input-schema rewrite that comes with it.
 **Rollback**: remove the route and the two packages; the domain and store stand alone.
-**Status**: [ ] Not Started
-
----
-
-### Stage 5 — OAuth 2.1 with an owner allowlist (the phone connector)
-
-**Goal**: The claude.ai phone app adds the connector and calls tools. **This is the M1 boundary Luis ratified.**
-**Depends on**: Stage 4.
-**Files**: `app/oauth/authorize/route.ts`, `app/oauth/token/route.ts`, `app/oauth/register/route.ts`, `app/.well-known/oauth-authorization-server/route.ts`, `oauth/jwt.ts`, `oauth/oauth.test.ts`.
-
-**Approach**:
-
-- Port DHT's `lib/mcp-oauth.ts` (227 lines, stateless HS256 JWTs, nothing persisted, no client store) — the design is proven against the real connector.
-- **The one change that matters.** DHT's `authorize/route.ts:42-57` mints a code for _any_ Google account that signs in, with no allowlist and no `signIn` callback. rocket is single-user and private: an owner-email allowlist is checked **before** code issuance, with a negative test asserting a non-owner is refused.
-- **Thread the principal into handlers.** DHT verifies the subject at the gate then discards it, and handlers read a static env var (`lib/mcp-create.ts:53-55`). rocket carries `AuthInfo` into the tool factory.
-- `typ` claim separating authorization codes from access tokens, checked on verify — without it a code travelling in a redirect URL and browser history is accepted verbatim as a bearer token (routr's finding).
-- Advertise `client_id_metadata_document_supported: true` **and** DCR: CIMD is preferred in the 2026-07-28 spec and avoids unbounded client accumulation, but claude.ai still accepts DCR, so support both. `code_challenge_methods_supported: ["S256"]`; accept `application/x-www-form-urlencoded` at `/token`; return `invalid_grant` (never `invalid_request`) for dead refresh tokens; rotate refresh tokens. Redirect allowlist: `https://claude.ai/api/mcp/auth_callback`, plus loopback `http://localhost/callback` and `http://127.0.0.1/callback` **with the port ignored** — mandatory for Claude Code and the kind of thing an off-the-shelf IdP rejects by default.
-- One `verifyAccessToken` satisfies both paths: the static Claude Code token is just another valid token. It **must** populate `expiresAt` in unix seconds — v2 rejects tokens without it.
-
-**TDD — RED**:
-
-```ts
-it('refuses to mint a code for a non-owner email', ...);        // the DHT trap
-it('rejects an authorization code presented as a bearer token', ...);  // typ separation
-it('completes a full PKCE flow that then unlocks /api/mcp', ...);
-it('rejects a tampered redirect_uri on the POST, not only the GET', ...);
-it('matches a loopback redirect ignoring the port', ...);
-it('threads the authenticated principal into the tool handler', ...);
-```
-
-**Post-stage**: `security-reviewer-fullstack` — **highest scrutiny in this plan**. Then the real device check: add the connector on the phone, log a run from bed.
-**Risks**: connector behaviour is only observable against the real deployment. Stage 4 keeps Claude Code working regardless.
-**Rollback**: drop the OAuth routes; `/api/mcp` falls back to bearer-only.
 **Status**: [ ] Not Started
 
 ---
@@ -485,6 +549,7 @@ it('threads the authenticated principal into the tool handler', ...);
 **Goal**: Weekly targets and a rolling 7–10 day window placed against availability, with guardrails that negotiate rather than silently comply.
 **Depends on**: Stage 3 (store seam) — **not** the load engine. **Blocked on open question 3.**
 **Files**: `domain/planner/macro.ts`, `domain/planner/micro.ts`, `domain/planner/guardrails.ts`, plus tests.
+**Budget**: 8 h — the largest surviving stage, and the one that makes this a coach rather than a viewer. **Cut line**: if not done by **2026-09-18**, ship the macro seed plus the ramp and single-session-spike guardrails only, and leave micro placement manual — a plan that argues about the sessions Luis proposes is most of the value; a plan that also places them is the rest.
 
 **Why this precedes the load engine.** Three of the four hard guardrails need only distance and the schedule:
 the ramp cap compares weekly km against last week; the minimum rest-or-swim-only day and taper protection read
@@ -526,6 +591,7 @@ it('offers a compliant alternative when a request breaks the ramp cap', ...);
 **Goal**: Loops A and B work end to end; the full nine-tool surface ships.
 **Depends on**: Stage 6.
 **Files**: `domain/replan.ts`, `mcp/tools.ts`, plus tests.
+**Budget**: 6 h. **Cut line**: if not done by **2026-09-21**, ship Loop B (the check-in path) and let Loop A degrade to a costed refusal without counterfactuals — naming the rule and its cost is the safety property; explaining the trade it _would_ have made is the polish.
 
 **Approach**: Every replan returns a **diff plus plain-language rationale** ("moved Thu quality → Sat, killed Fri easy, week stays at 52km"). Loop A must keep counterfactuals to explain the trade it made — that is the hard part, not the re-placement. Tools never dead-end: a guardrail refusal always carries a counter-offer.
 **TDD — RED**: the two acceptance loops from `00-overview.md:9-11`, driven through `tools/call`:
@@ -536,12 +602,81 @@ it('Loop A: an unplanned 30km logged after the fact downgrades the next quality 
 it('Loop B: severe DOMS rebuilds the week easy-or-nothing and leaves swim volume untouched', ...);
 it('Loop B: quality stays gated until reported soreness clears', ...);  // check-in only at this stage
 it('every replan response names what moved and what it cost', ...);
+it('a race added mid-block moves the long run off that date and says so', ...);   // seeded from RACES: Lincoln, LDNX
+it('a race cancelled mid-block returns the date to ordinary planning', ...);      // seeded from RACES: Dorney, role 'dropped'
 ```
+
+**Why those last two are not speculative coverage (ledger F29, S6.8).** The 2026-09-06 macro re-derivation put the block's
+peak 35 km long run on Lincoln Half day and a cut-back long run on LDNX 10K day, and nothing in the repo caught it, because
+`BLOCK` held only the goal and tune-up races and no other race existed anywhere the planner could see. That is a defect this
+repo actually shipped, not a hypothetical. Both fixtures lift straight out of `config/training.ts` `RACES` as it stands —
+Lincoln and LDNX as the added case, Dorney's `role: 'dropped'` as the cancelled one — which makes them close to free.
+
+**Eval posture for this stage, settled 2026-09-07 (ledger F29).** The vitest fixture tier above is the whole mandatory
+tier and carries roughly 90% of the value. A small promptfoo tier (five to ten transcript cases) has exactly one job the
+fixtures cannot do — asserting that Claude does not narrate a write the tool rejected — and that assertion is only writable
+once the write-tool contract's `applied` boolean exists. So promptfoo is **sequenced after** that contract and **cut if it
+slips**. **LLM-as-judge is cut outright**: a second model grading transcripts is a second unvalidated source of truth on a
+plan whose whole premise is that guardrails are evaluated deterministically.
 
 Loop B's recovery signal is the **subjective check-in alone** here. `02-load-engine.md:21` also wants HRV and
 resting HR in that gate; those terms arrive with Stage 9 and upgrade this behaviour without changing its shape.
 
 **Post-stage**: `code-reviewer`, then the full suite.
+**Status**: [ ] Not Started
+
+---
+
+### Stage 5 (DEFERRED past 2026-10-24) — OAuth 2.1 with an owner allowlist (the phone connector)
+
+**Goal**: The claude.ai phone app adds the connector and calls tools.
+**Status of the goal itself**: this was ratified on 2026-08-16 as the M1 boundary. **That ratification is superseded by
+option A (2026-09-07)**, and this stage now sits after the planner and the check-in loop and outside the pre-race path
+(ledger F23, F30). Nothing about the port gets harder by waiting — it is a near-verbatim lift of a working file — and it is
+the only stage in the plan whose output is zero coaching.
+
+**The consequence, stated rather than left implicit.** With OAuth past 24 October, the coach is reachable from Claude Code and
+the desktop but **not from the phone** for the whole block, and a 06:00 check-in happens in bed rather than at a desk. Two
+facts settle how that gets closed, both established empirically rather than assumed:
+
+- **`static_headers` is not a path.** It is an Anthropic Beta, described as a fixed credential entered by an _organization
+  administrator_ as a request header — an org-admin surface, not a Pro individual one. Empirically, claude.ai's custom
+  connectors ignore a static token and run the full OAuth flow regardless: established the hard way on DoHardThings
+  (`routr/docs/MCP_CONNECTOR_GUIDE.md:14-24` — "there is no field for it in the connector dialog"). Do **not** spend a
+  five-minute check on this; the answer is no.
+- **Authless is supported**, with Anthropic's egress fixed at `160.79.104.0/21`. So the ten-line alternative for the two-week
+  window is to publish the MCP route with auth type `none` at an unguessable path, allowlisted to that range. The residual
+  risk in one sentence: anyone who obtains the URL _and_ can reach it from Anthropic's network could read Luis's training
+  data — they could not corrupt his history, which the append-only guards refuse. **This is Luis's to veto**, and it is one
+  of the two open decisions in the 2026-09-07 ledger.
+
+**Depends on**: Stage 4.
+**Budget when it lands (post-race)**: ~600 lines and the highest-scrutiny security review in the plan. Not budgeted before 2026-10-24.
+**Files**: `app/oauth/authorize/route.ts`, `app/oauth/token/route.ts`, `app/oauth/register/route.ts`, `app/.well-known/oauth-authorization-server/route.ts`, `oauth/jwt.ts`, `oauth/oauth.test.ts`.
+
+**Approach**:
+
+- Port DHT's `lib/mcp-oauth.ts` (227 lines, stateless HS256 JWTs, nothing persisted, no client store) — the design is proven against the real connector.
+- **The one change that matters.** DHT's `authorize/route.ts:42-57` mints a code for _any_ Google account that signs in, with no allowlist and no `signIn` callback. rocket is single-user and private: an owner-email allowlist is checked **before** code issuance, with a negative test asserting a non-owner is refused.
+- **Thread the principal into handlers.** DHT verifies the subject at the gate then discards it, and handlers read a static env var (`lib/mcp-create.ts:53-55`). rocket carries `AuthInfo` into the tool factory.
+- `typ` claim separating authorization codes from access tokens, checked on verify — without it a code travelling in a redirect URL and browser history is accepted verbatim as a bearer token (routr's finding).
+- Advertise `client_id_metadata_document_supported: true` **and** DCR: CIMD is preferred in the 2026-07-28 spec and avoids unbounded client accumulation, but claude.ai still accepts DCR, so support both. `code_challenge_methods_supported: ["S256"]`; accept `application/x-www-form-urlencoded` at `/token`; return `invalid_grant` (never `invalid_request`) for dead refresh tokens; rotate refresh tokens. Redirect allowlist: `https://claude.ai/api/mcp/auth_callback`, plus loopback `http://localhost/callback` and `http://127.0.0.1/callback` **with the port ignored** — mandatory for Claude Code and the kind of thing an off-the-shelf IdP rejects by default.
+- One `verifyAccessToken` satisfies both paths: the static Claude Code token is just another valid token. It **must** populate `expiresAt` in unix seconds — v2 rejects tokens without it.
+
+**TDD — RED**:
+
+```ts
+it('refuses to mint a code for a non-owner email', ...);        // the DHT trap
+it('rejects an authorization code presented as a bearer token', ...);  // typ separation
+it('completes a full PKCE flow that then unlocks /api/mcp', ...);
+it('rejects a tampered redirect_uri on the POST, not only the GET', ...);
+it('matches a loopback redirect ignoring the port', ...);
+it('threads the authenticated principal into the tool handler', ...);
+```
+
+**Post-stage**: `security-reviewer-fullstack` — **highest scrutiny in this plan**. Then the real device check: add the connector on the phone, log a run from bed.
+**Risks**: connector behaviour is only observable against the real deployment. Stage 4 keeps Claude Code working regardless.
+**Rollback**: drop the OAuth routes; `/api/mcp` falls back to bearer-only.
 **Status**: [ ] Not Started
 
 ---
@@ -618,8 +753,9 @@ it('does not change the run verdict when only swim load rose', ...);  // the swi
 ### Stage 10 — Seed data and end-to-end validation
 
 **Goal**: The Battersea block is loaded and the whole loop is proven with recorded evidence.
-**Depends on**: all prior stages.
+**Depends on**: all prior **pre-race** stages — 0, 1, 2, 3, 3b, 4, 6, 7. Not Stage 5, 8 or 9.
 **Files**: `db/seed.ts`, `docs/M1_OPERATOR_GUIDE.md`.
+**Budget**: 3 h. **Cut line**: if not done by **2026-09-23**, items 1–4 and 10 below are mandatory and 5–9 become best-effort — the gates and the append-only proof are what make the system trustworthy; the screenshots are what make it presentable.
 
 **Each item names its evidence artifact**:
 
@@ -628,7 +764,7 @@ it('does not change the run verdict when only swim load rose', ...);  // the swi
 3. Guards: `check_gate_ledger.py`, `test_guards.py` — output.
 4. Seed loads the 11 macro weeks and 4 races **from `config/training.ts` `BLOCK_WEEKS`** — an insert, not an authoring job; a second run is idempotent.
 5. Backfill the real July–August activity history; CTL reports `warmingUp` — screenshot.
-6. Phone: add the connector, `get_status`, log a run, check in — screenshots.
+6. Claude Code: add the connector with a bearer, `get_status`, log a run, check in — screenshots. (The **phone** variant of this item moves with Stage 5, unless Luis takes the authless option in the ledger's open decision 2.)
 7. Loop A and Loop B driven from the phone in natural language — transcript.
 8. Unauthenticated `curl` against `/api/mcp` from outside → 401 — capture.
 9. A planted secret is caught by gitleaks — capture (closes the one unproven ledger row).
@@ -700,7 +836,30 @@ session-level tool.
 - **Order**: reverse-chronological, 10 → 1. Stages 2, 6, 7, 8, 9 are pure domain code and revert cleanly.
 - **Point of no return: Stage 1, the moment real training data lands.** After that the schema cannot be dropped and re-created — that is the entire premise of the append-only rule. Schema changes past that point are additive migrations only. The event trigger will block a `drizzle-kit migrate` that drops a protected table, which is the desired behaviour and requires the documented escape hatch to override deliberately.
 - **Persisting state after rollback**: logged activities and check-ins survive by design. OAuth tokens are stateless and die with a secret rotation. Connector entries in claude.ai must be removed by hand.
-- **Partial-failure posture**: every stage leaves a working system. Stage 4 alone ships a Claude Code coach; Stage 5 ships the phone; Stages 6–7 make it argue back. Stages 8–9 deepen a system already in daily use.
+- **Partial-failure posture**: every stage leaves a working system. Stage 4 alone ships a Claude Code coach; Stages 6–7 make it argue back; Stage 5 later ships the phone. Stages 8–9 deepen a system already in daily use. Under option A the pre-race path stops after Stage 10, and stopping there is a legitimate end state rather than an abandonment.
+
+---
+
+### Deferred-Items Register
+
+Every row option A cut, with a classification, a named owner and a re-ratification date, per the deferral-closure rule. Prose
+in a review document or an MR description does not count as tracking — it scrolls out of view at merge, which is exactly how
+the 2026-08-16 plan came to contain stages nobody intended to build. **No row may carry "future hygiene", "consider later" or
+an empty owner**: an item that cannot be classified belongs in the pre-race path instead. This plan is not complete while any
+MUST-this-sprint row is open, and closure is evidence — a merged commit link in the row, never an assertion.
+
+| Item                                                                             | Struck from  | Classification                                                                                                                                   | Owner                                                                | Re-ratification                                                                                      |
+| -------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| OAuth 2.1 server (~600 lines plus the highest-scrutiny security review)          | Stage 5      | RATIFIED-out by the 2026-09-07 option-A decision                                                                                                 | Post-race session; port DHT's `lib/mcp-oauth.ts`, do not write fresh | After 2026-10-24                                                                                     |
+| Second store implementation (`store/memory.ts`) and the two-store contract suite | Stage 3      | RATIFIED-out                                                                                                                                     | Post-race session                                                    | After 2026-10-24, or sooner if a second backing store is proposed                                    |
+| `sql_drop` event trigger over the guarded-table name list                        | Stage 1      | RATIFIED-out — already rejected **with reasoning** in `src/db/migrations/0001_append_only_guards.sql:30-37`, not skipped silently                | Post-race session                                                    | Only if a guarded table is ever dropped by a migration in anger                                      |
+| Two-component cardio/musculoskeletal load model                                  | Stage 8      | RATIFIED-out; the revisit trigger is already named in this plan's "Deferred hardest" paragraph                                                   | Post-race session                                                    | After ~3 weeks of Stage 9 data alongside Garmin's own series                                         |
+| Readiness formula implementation                                                 | Stage 9      | RATIFIED-out — the `config/training.ts` and `02-load-engine.md` edits land now, the implementation does not                                      | `config/training.ts` owner now; implementation post-race             | After 2026-10-24                                                                                     |
+| Grade- and pace-dependent descent multiplier                                     | Stage 8      | BLOCKED-external: `MULTIPLIERS` has no consumer until Stage 8 exists, so tuning it tunes a number nothing reads                                  | With Stage 8                                                         | With Stage 8                                                                                         |
+| Swim-night HRV exclusion, as implementation                                      | Stage 9      | BLOCKED-external: no overnight HRV and no sleep score exist in the account — `hrv_day` and `hrv_range_7d` came back empty over a seven-day probe | Blocked on the watch being worn asleep (`07-wiring-todo.md:22`)      | When overnight metrics start arriving                                                                |
+| Structured workout steps, pace/HR targets, Garmin-direct workout upload          | outbound leg | RATIFIED-out; the one-event-per-day calendar leg still ships                                                                                     | Post-race session                                                    | After 2026-10-24                                                                                     |
+| `docs/specs/08-capability-packs.md` and the routr / DoHardThings seams           | out of scope | RATIFIED-out. The `rocket_` tool-name prefix is pulled **forward** regardless, because tool names cannot be changed after the connector is added | spec owner now for the rename; seams post-race                       | After 2026-10-24; the register row names routr's 30-minute candidate expiry as the design constraint |
+| promptfoo transcript tier                                                        | Stage 7      | **MUST-this-sprint**, conditional on the write-tool contract's `applied` boolean landing; cut if that slips                                      | Same session as Stage 7                                              | At Stage 7 close-out                                                                                 |
 
 ---
 
@@ -722,7 +881,7 @@ session-level tool.
 - [ ] Every tool call, auth rejection, OAuth grant and replan emits one greppable `key=value` line; no secrets, no check-in note contents
 - [ ] No duplication: one currency conversion, one store seam, one guardrail evaluator
 - [ ] Every Phase 1 assumption validated or its fallback executed
-- [ ] Open questions 3, 4 and 5 answered before Stages 6 and 9
+- [ ] Open question 3 answered before Stage 6; 4 and 5 before Stage 9 — 4's TSB-gating recommendation was **withdrawn** on 2026-09-07 and must not be re-proposed without new evidence
 
 ### Skill/agent gates
 
@@ -735,16 +894,17 @@ session-level tool.
 
 ## Phase 4 — Todo breakdown
 
-- [ ] **S0**: SDK v2 spike · Neon `ENABLE ALWAYS` spike · zod-3 probe · **Garmin source probe (G1)** · **request the bulk export** · record results here
-- [ ] **S1**: pinned deps · `db/client.ts` pool + `attachDatabasePool` · **five-table** schema · init migration · custom guard migration (role, triggers, event trigger) · integration `globalSetup` throw · SQLSTATE tests · security review
-- [ ] **S2**: branded types · RPE tier · currency anchor tests
-- [ ] **S3**: four-file store seam · shared contract suite over both impls
-- [ ] **S3b**: bulk export parsed (read `GarminDB`'s parser first) · provenance columns · staging-table-then-promote · idempotency + gap-count tests · chronic-load seed extracted
-- [ ] **S4**: `/api/mcp` route · 3 tools · `ok`/`fail`/`reason` · both well-known docs · `npm ls zod` gate · client-driven contract tests · Claude Code manual check · security review
-- [ ] **S5**: OAuth routes · owner allowlist · `typ` separation · CIMD + DCR · port-agnostic loopback · principal threading · PKCE flow tests · **phone connector check** · security review
-- [ ] **S6**: macro seed read from `BLOCK_WEEKS` · micro placement · guardrails (distance + schedule + check-in only) · week-6 feasibility test
-- [ ] **S7**: replan diffs + rationale · Loops A and B through `tools/call` · remaining tools
+- [ ] **S0** (2 h, cut 09-09): Neon `ENABLE ALWAYS` spike · **Garmin source probe (G1)** · **request the bulk export** · record results here
+- [x] **S1**: delivered in `9153fde` — pinned deps · `src/db/client.ts` pool + `attachDatabasePool` · **five-table** schema · init migration · custom guard migration (role, row triggers, TRUNCATE triggers; event trigger rejected with reasoning). Still owed: integration `globalSetup` throw · SQLSTATE tests against the live database · security review
+- [ ] **S2** (3 h, cut 09-09): branded types · RPE tier · currency anchor tests
+- [ ] **S3** (3 h, cut 09-10): store seam, **one** implementation — `types.ts` / `drizzle.ts` / factory · suite against real Postgres · `storeConfigured()` false-path test
+- [ ] **S3b** (4 h, cut 09-14): bulk export parsed (read `GarminDB`'s parser first) · provenance columns · staging-table-then-promote · idempotency + gap-count tests · chronic-load seed extracted (`dailyTrainingLoadChronic = 287`)
+- [ ] **S4** (6 h, cut 09-14): `app/api/mcp/[transport]/route.ts` on `mcp-handler@1.1.0` + `sdk@1.29.0`, pinned exact · 3 tools · `ok`/`fail`/`reason` · both well-known docs · `npm ls zod` gate · client-driven contract tests · Claude Code manual check · security review
+- [ ] **S6** (8 h, cut 09-18): macro seed read from `BLOCK_WEEKS` · micro placement · guardrails (distance + schedule + check-in only) · week-6 feasibility test
+- [ ] **S7** (6 h, cut 09-21): replan diffs + rationale · Loops A and B through `tools/call` · **race-added and race-cancelled fixtures seeded from `RACES`** · remaining tools
+- [ ] ~~**S5**~~ **deferred past 2026-10-24**: OAuth routes · owner allowlist · `typ` separation · CIMD + DCR · port-agnostic loopback · principal threading · PKCE flow tests · **phone connector check** · security review
 - [ ] **S8**: TRIMP + pace tiers · MSK joules · descent-only-on-pace-tier · trail-vs-road regression pair
 - [ ] **S9**: ATL/CTL/TSB calendar-day recurrence · **warm-start CTL from a seed** · readiness renormalisation · `warmingUp` · Garmin oracle stored alongside and reconciled
-- [ ] **S10**: seed · backfill · ten-item validation with named artifacts
-- [ ] Close-out: ledger swept, spec amendments raised (`03-planner.md:11` run-commute framing; the two spec defects). Record the G1 branch taken as a decision-log entry.
+- [ ] **S10** (3 h, cut 09-23): seed · backfill · ten-item validation with named artifacts
+- **Pre-race total: ~35 h of agent time** across S0, S2, S3, S3b, S4, S6, S7, S10 — two weeks of evenings, live around 20 September, five weeks of real use before 24 October. If the running total passes 35 h with S4 unshipped, stop adding stages and take the cut lines.
+- [ ] Close-out: **Deferred-Items Register swept** — every MUST-this-sprint row delivered with a commit link, or escalated to Luis for explicit re-ratification; self-downgrading a MUST row is forbidden. Then: spec amendments raised (`03-planner.md:11` run-commute framing; the two spec defects), and the G1 branch taken recorded as a decision-log entry.
