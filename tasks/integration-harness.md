@@ -58,3 +58,4 @@ Readiness factors or Garmin's own acute/chronic pair. Recorded in `docs/decision
 
 - `cffd93b` feat(tools): harness that wires Garmin and Strava in
 - `454bb3d` fix(garmin): wait for the MFA code rather than checking once
+- `6d4dd48` fix(strava): accept the space-delimited scope Strava actually returns

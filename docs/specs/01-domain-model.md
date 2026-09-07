@@ -4,11 +4,20 @@
 
 **Athlete** (singleton) — profile: threshold/goal paces (provisional until Lincoln Half confirms), shoe inventory (carbons = race + key long runs; road trainer = daily mileage; Peregrine 16 = trail only), swim status (learning front crawl, one 2-hour session per week), injury notes. No cycling.
 
-**Race** — date, name, distance, **role** (`goal | rehearsal | sharpener | easy | absorbed`), droppable=false for all current entries. Synced from DoHardThings. Current set:
-- 2026-10-03 Dorney Triathlon — easy (swim leg is the week's swim session)
-- 2026-10-04 Lincoln Half — rehearsal (marathon pace, confirms goal pace)
-- 2026-10-11 ASICS LDNX 10K — sharpener (inside taper)
+**Race** — date, name, distance, **role** (`goal | tune-up | rehearsal | sharpener | easy | dropped`), droppable. Live set is `config/training.ts` `RACES`; this list is an extract. Ratified 2026-09-07:
+- 2026-09-12 Battersea Park Half — tune-up (same park as the goal; its result sets goal pace)
+- 2026-10-03 Dorney Triathlon — **dropped** (not attending; retained on the record)
+- 2026-10-04 Lincoln Half — rehearsal (marathon pace, carries week 4's long session)
+- 2026-10-11 ASICS LDNX 10K — sharpener (carries week 5's long session)
 - 2026-10-24 Battersea Park Marathon — **goal**
+
+A race on a date is visible to session placement: a long or quality session may not
+land on a live race date unless that week names the race as carrying it. Nothing
+enforced this before 2026-09-07 and the peak long run was scheduled on Lincoln day.
+
+**Attendance is not derivable.** DoHardThings records "going" in Google Calendar
+`extendedProperties`, which the Calendar connector does not return, so `RACES` is
+ratified by hand until a `rocket_import_race` seam exists.
 
 **Block / Week** — macro layer. Each week: target load, target km, phase (`rebuild | build | peak | race-prep | taper | race`), max quality sessions.
 

@@ -7,9 +7,11 @@ import {
   BLOCK_WEEKS,
   CHECK_IN_GATES,
   GUARDRAILS,
+  LIVE_RACE_DATES,
   MEASURED_BASE,
   MULTIPLIERS,
   PACE_ESTIMATES,
+  RACES,
   READINESS,
   SHOES,
 } from './training';
@@ -195,8 +197,11 @@ describe('long runs', () => {
     (w) => w.longRunKm as number,
   );
 
-  it('carries five long runs across the block', () => {
-    expect(longRuns).toEqual([20, 30, 35, 26, 18]);
+  it('carries six long sessions, three of them carried by races', () => {
+    // 21.1 is the Battersea Half, 35 is Lincoln inside a long day, 16 is LDNX.
+    // Reshaped 2026-09-07: the 26 that used to sit here was a long run on
+    // LDNX day, which is why it is now 16.
+    expect(longRuns).toEqual([21.1, 20, 30, 35, 16, 18]);
   });
 
   it('builds to a peak then comes down through the taper', () => {
@@ -216,6 +221,70 @@ describe('long runs', () => {
   it('puts every long run at or above the carbon threshold in carbons', () => {
     const peak = Math.max(...longRuns);
     expect(peak).toBeGreaterThanOrEqual(SHOES.carbonMinDistanceKm);
+  });
+});
+
+/**
+ * The collision these guard against was real and committed: the block re-derived
+ * on 2026-09-06 put the peak 35 km long run on Sunday 4 October, which is Lincoln
+ * Half day, and a 26 km week ending on LDNX 10K day. Nothing caught it because no
+ * race data existed for anything to check against. Found by adversarial review F6.
+ */
+describe('races and session placement', () => {
+  it('never places a long session on a live race date uninvited', () => {
+    const trespassing = BLOCK_WEEKS.filter(
+      (w) =>
+        w.longRunDate !== null &&
+        LIVE_RACE_DATES.includes(w.longRunDate) &&
+        w.longRunOnRace === null,
+    );
+
+    expect(trespassing.map((w) => w.longRunDate)).toEqual([]);
+  });
+
+  it('names the actual race whenever one carries the long session', () => {
+    for (const week of BLOCK_WEEKS) {
+      if (week.longRunOnRace === null) continue;
+
+      const race = RACES.find((r) => r.name === week.longRunOnRace);
+      expect(race, `no race named ${week.longRunOnRace}`).toBeDefined();
+      expect(race?.date).toBe(week.longRunDate);
+      expect(race?.role).not.toBe('dropped');
+    }
+  });
+
+  it('dates every long session, so a collision is detectable at all', () => {
+    // Widened deliberately: against the const-asserted literal TS narrows this
+    // filter to `never` because it can already prove the invariant. Keeping the
+    // runtime assertion means it still holds once weeks are loaded from the
+    // database rather than read from a literal.
+    const weeks: readonly {
+      week: number;
+      longRunKm: number | null;
+      longRunDate: string | null;
+    }[] = BLOCK_WEEKS;
+    const undated = weeks.filter(
+      (w) => w.longRunKm !== null && w.longRunDate === null,
+    );
+
+    expect(undated.map((w) => w.week)).toEqual([]);
+  });
+
+  it('keeps the dropped race on the record rather than deleting it', () => {
+    const dorney = RACES.find((r) => r.name === 'Dorney Triathlon');
+
+    expect(dorney?.role).toBe('dropped');
+    expect(LIVE_RACE_DATES).not.toContain(dorney?.date);
+  });
+
+  it('leaves one uninterrupted long run before the races take over', () => {
+    const uninterrupted = BLOCK_WEEKS.filter(
+      (w) => w.longRunKm !== null && w.longRunOnRace === null && w.week > 1,
+    );
+
+    // Weeks 2, 3 and 6. Both peak-fortnight slots are races, which is the
+    // whole reason the block was reshaped.
+    expect(uninterrupted.map((w) => w.week)).toEqual([2, 3, 6]);
   });
 });
 

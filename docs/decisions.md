@@ -605,3 +605,63 @@ target, that the running-day count matches `minRunDays`, and that the day marked
 above it.
 
 **Status:** ACTIVE
+
+## 2026-09-07 -- races become first-class data, and the peak fortnight is reshaped around them
+
+**Context:** the adversarial review (F6) found that three entered October races
+appeared nowhere in `config/` or this log, and that the macro layer re-derived on
+2026-09-06 consequently placed the block's peak 35 km long run on Sunday 4
+October -- Lincoln Half day -- and a 26 km week ending Sunday 11 October, LDNX
+10K day. Nothing caught it, because `BLOCK` held only the goal and tune-up races
+and no other race existed anywhere the planner could see.
+
+**Decision:** Luis ratified on 2026-09-07: **Dorney Triathlon (3 Oct) is
+dropped**; **Lincoln Half (4 Oct) and ASICS LDNX 10K (11 Oct) still stand**. A
+new exported `RACES` carries every fixture with date, distance, role and
+droppable, including Dorney as `dropped` rather than deleted. Every `BLOCK_WEEKS`
+entry now carries `longRunDate`, and `longRunOnRace` names the race when one
+carries the session. The two races carry their weeks' long sessions:
+
+- Sun 27 Sep, 30 km -- the last uninterrupted long run of the block.
+- Sun 4 Oct -- Lincoln as ~8 km warm-up + 21.1 km at marathon pace + ~6 km easy,
+  a ~35 km day, 20 days out.
+- Sun 11 Oct -- LDNX 10K hard inside a ~16 km day, cut from the 26 km that week
+  previously held.
+
+**Alternatives rejected:** moving the long runs to the Saturday before each race,
+which stacks a 30 km+ run the day before a race and is the same collision moved
+by 24 hours. Also rejected: dropping the peak long run, which would leave the
+block with nothing over 30 km.
+
+**Consequences:** the Lincoln construction turns a race that would have wrecked
+the peak week into the block's best marathon-specific session. It is
+**conditional on Lincoln being run at marathon pace, not raced flat out** -- the
+role the original spec gave it. Reversible: if Luis races it hard, week 4 loses
+its long session and the 100 km target should come down. Week 5's 80 km now sits
+in midweek volume rather than the weekend, which is the correct taper shape.
+Race week's `longRunKm` is null: the marathon is the goal, not a planned training
+session, and counting it put 42.195 into every long-run aggregate.
+
+Week 1's target moved 20 -> 28 km, because the half is 21.1 km and the week's own
+long session was larger than its total.
+
+**Status:** ACTIVE
+
+## 2026-09-07 -- race attendance is not derivable from DoHardThings
+
+**Context:** Luis asked why rocket could not see that he had dropped Dorney,
+noting it is visible in DoHardThings. It is not reachable: DoHardThings records
+attendance in Google Calendar `extendedProperties`, and the Google Calendar
+connector returns the event without them. Verified against the Lincoln Half
+event -- summary, dates and description come back, no extended properties, no
+attendees. Its calendar is also a shared catalogue containing races nobody is
+entered in, so presence on it means nothing about attendance.
+
+**Decision:** `RACES` is ratified by hand until a `rocket_import_race` seam
+exists. Do not infer attendance from calendar presence.
+
+**Consequences:** this is exactly how three entered races went missing from a
+committed block, so it is a standing hazard rather than a one-off. It is the
+concrete argument for the review's F26 seam.
+
+**Status:** ACTIVE

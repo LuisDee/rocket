@@ -10,6 +10,12 @@ Goal: Battersea Park Marathon, 2026-10-24, as fast as possible.
 > 2026-09-12, four build weeks and two taper weeks. The *intent* below still
 > holds -- phases, guardrails, shoe policy, and deriving marathon pace from a
 > rehearsal result rather than guessing it. See docs/decisions.md 2026-09-06.
+>
+> **Further superseded 2026-09-07 as to races.** Dorney is dropped; Lincoln and
+> LDNX stand and now carry their weeks' long sessions rather than competing with
+> them. The goal band below (~3:25-3:35) is retired: goal pace is derived from
+> the 12 Sep half result as a range, not chosen in advance. Live race data is
+> `config/training.ts` `RACES`.
 
 ## Athlete baseline (2026-08-10)
 - Recent weekly volume ~30km (relaxed, out of a previous block). Longest recent: 33km trail/600m on 2026-08-09 → severe DOMS (eccentric downhill load + new Peregrines + uneven surface; three novel stressors). Prior week: 30km road @5:00/km in carbons, felt easy.

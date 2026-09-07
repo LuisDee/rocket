@@ -87,4 +87,4 @@ write it -- `volume-block` owns that file concurrently.
 
 ## Commits
 
-(populated as work lands)
+- `9153fde` feat(db): Neon schema, append-only guards and connection pool

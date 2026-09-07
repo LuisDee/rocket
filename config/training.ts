@@ -38,6 +38,74 @@ export const BLOCK = {
 } as const;
 
 /**
+ * Every race in the block, whether or not it is still happening.
+ *
+ * This exists because it was missing, and its absence was a real bug rather
+ * than an omission. The macro layer re-derived on 2026-09-06 placed the peak
+ * 35 km long run on Sunday 4 October -- Lincoln Half day -- and a 26 km week
+ * ending on Sunday 11 October, LDNX 10K day. Nothing caught it, because
+ * `BLOCK` held only the goal and tune-up races and no other race existed
+ * anywhere the planner could see. Found by the adversarial review, F6.
+ *
+ * A race on a date must therefore be visible to anything placing a session on
+ * that date. `dropped` entries stay: a race that was entered and then dropped
+ * is a decision, and deleting the row loses the fact that it was ever
+ * considered.
+ *
+ * Discovery gap worth knowing: DoHardThings records attendance in Google
+ * Calendar `extendedProperties`, which the Google Calendar connector does not
+ * return. So this list cannot currently be derived -- it is ratified by hand.
+ * That is the argument for a `rocket_import_race` seam (review F26).
+ */
+export const RACES = [
+  {
+    date: '2026-09-12',
+    name: 'Battersea Park Half Marathon',
+    distanceKm: 21.1,
+    role: 'tune-up',
+    droppable: false,
+    note: 'Same park as the goal marathon, so it doubles as a course rehearsal. Its result settles PACE_ESTIMATES.',
+  },
+  {
+    date: '2026-10-03',
+    name: 'Dorney Triathlon',
+    distanceKm: null,
+    role: 'dropped',
+    droppable: true,
+    note: 'DROPPED. Ratified by Luis 2026-09-07 -- he is not attending. Retained rather than deleted so the record shows it was considered and released, not forgotten.',
+  },
+  {
+    date: '2026-10-04',
+    name: 'Lincoln Half Marathon',
+    distanceKm: 21.1,
+    role: 'rehearsal',
+    droppable: false,
+    note: 'Run at MARATHON PACE, not raced. Carries week 4 long session -- see that week for the construction and its reversal condition.',
+  },
+  {
+    date: '2026-10-11',
+    name: 'ASICS LDNX 10K',
+    distanceKm: 10,
+    role: 'sharpener',
+    droppable: false,
+    note: 'The only hard intensity of the taper. Carries week 5 long session.',
+  },
+  {
+    date: '2026-10-24',
+    name: 'Battersea Park Marathon',
+    distanceKm: 42.195,
+    role: 'goal',
+    droppable: false,
+    note: 'Carbons.',
+  },
+] as const;
+
+/** Race dates that still stand. A session may not land on one uninvited. */
+export const LIVE_RACE_DATES: readonly string[] = RACES.filter(
+  (r) => r.role !== 'dropped',
+).map((r) => r.date);
+
+/**
  * Guardrails. docs/specs/03-planner.md:22-28.
  *
  * These are negotiated, never silently broken: state the rule, quantify the
@@ -323,10 +391,26 @@ export type DayPlan = {
  * run. Luis further states he has run 60 km weeks comfortably and that some
  * history never reached Garmin. That is stipulated, not re-litigated.
  *
- * Peak volume AND the peak long run both land in the week of 28 Sep, leaving
+ * Peak volume AND the peak long session both land in the week of 28 Sep, leaving
  * three full taper weeks. That was deliberate over putting 100 km in the week of
  * 5 Oct, which would have left only two -- his own framing was "get it in early
  * and taper right down".
+ *
+ * RESHAPED 2026-09-07 around the two races that survived ratification. The
+ * previous cut placed a 35 km long run on Sunday 4 October and a 26 km week
+ * ending Sunday 11 October, both of which are race days -- it could not see them
+ * because no race data existed (see RACES). Rather than move the long runs to the
+ * Saturdays before, which merely stacks a 30 km+ run the day before a race, the
+ * two races now CARRY their weeks' long sessions:
+ *
+ *   - Sun 27 Sep, 30 km, is the last uninterrupted long run of the block.
+ *   - Sun  4 Oct, Lincoln Half at marathon pace inside a ~35 km day.
+ *   - Sun 11 Oct, LDNX 10K hard inside a ~16 km day.
+ *
+ * Every long session now carries `longRunDate`, and `longRunOnRace` names the
+ * race when one carries it. A long session may not otherwise land on a live race
+ * date -- asserted in the tests, because nothing asserted it before and that is
+ * exactly how the collision reached a committed plan.
  *
  * `rampExemption` is non-null exactly when the step INTO that week exceeds
  * ACTIVE_RAMP_CAP_PCT. Under the 35 % aggressive cap exactly one step does, and
@@ -346,12 +430,17 @@ export const BLOCK_WEEKS = [
     week: 1,
     monday: '2026-09-07',
     phase: 'race-taper',
-    targetKm: 20,
-    longRunKm: null,
+    // 21.1 of this is the race itself; the rest is taper shakeout. The earlier
+    // 20 predated the half being counted as part of the week at all, which made
+    // the week's own long session larger than its total.
+    targetKm: 28,
+    longRunKm: 21.1,
+    longRunDate: '2026-09-12',
+    longRunOnRace: 'Battersea Park Half Marathon',
     minRunDays: 4,
     rampExemption: null,
     days: null,
-    note: 'Taper into the Battersea Half, Sat 12 Sep. Not a training week, and not a valid ramp baseline.',
+    note: 'Taper into the Battersea Half, Sat 12 Sep. The half IS the long session. Not a training week, and not a valid ramp baseline.',
   },
   {
     week: 2,
@@ -359,6 +448,8 @@ export const BLOCK_WEEKS = [
     phase: 'rebuild',
     targetKm: 60,
     longRunKm: 20,
+    longRunDate: '2026-09-19',
+    longRunOnRace: null,
     minRunDays: 6,
     rampExemption:
       '+72.4% on MEASURED_BASE.preTaperBaselineKm (34.8 km, w/c 17 Aug), over the 35% aggressive ' +
@@ -398,10 +489,12 @@ export const BLOCK_WEEKS = [
     phase: 'build',
     targetKm: 80,
     longRunKm: 30,
+    longRunDate: '2026-09-27',
+    longRunOnRace: null,
     minRunDays: 6,
     rampExemption: null,
     days: null,
-    note: '+33.3%, inside the aggressive cap. Six running days: freed evenings make AM/PM doubles available if a morning is missed.',
+    note: '+33.3%, inside the aggressive cap. Six running days: freed evenings make AM/PM doubles available if a morning is missed. This is the LAST uninterrupted long run of the block -- both remaining long-session slots are races.',
   },
   {
     week: 4,
@@ -409,21 +502,37 @@ export const BLOCK_WEEKS = [
     phase: 'peak',
     targetKm: 100,
     longRunKm: 35,
+    longRunDate: '2026-10-04',
+    longRunOnRace: 'Lincoln Half Marathon',
     minRunDays: 7,
     rampExemption: null,
     days: null,
-    note: 'Peak volume and peak long run together, 26 days out. +25%, inside the cap. Seven running days: 100 km over five would be 20 km a day.',
+    note:
+      'Peak volume and peak long session together, 20 days out. +25%, inside the cap. ' +
+      'The long session IS Lincoln, built as ~8 km easy warm-up + 21.1 km AT MARATHON PACE + ~6 km easy = ~35 km. ' +
+      'This turns a race that would otherwise have wrecked the peak week into the best marathon-specific session ' +
+      'of the block: a long run with a large marathon-pace block inside it, on tired legs, three weeks out. ' +
+      'CONDITION: it requires Lincoln run at marathon pace, not raced flat out. That was the role the original ' +
+      'spec gave Lincoln ("rehearsal -- marathon pace, confirms goal pace"), so this restores intent rather than ' +
+      'imposing a new constraint. REVERSIBLE: if Luis races it hard, this week loses its long session and the ' +
+      '100 km target should come down. Seven running days: 100 km over five would be 20 km a day.',
   },
   {
     week: 5,
     monday: '2026-10-05',
     phase: 'taper',
     targetKm: 80,
-    longRunKm: 26,
+    longRunKm: 16,
+    longRunDate: '2026-10-11',
+    longRunOnRace: 'ASICS LDNX 10K',
     minRunDays: 6,
     rampExemption: null,
     days: null,
-    note: 'First taper step. Volume comes off before the long run does.',
+    note:
+      'First taper step. The long session IS the LDNX 10K: warm-up + 10 km hard + cool-down, ~16 km. ' +
+      'Cut from the 26 km this week previously held, because a 10K raced hard is the intensity and a long run ' +
+      'on top of it is not recoverable 13 days out. The weekly 80 km therefore sits in midweek volume rather ' +
+      'than the weekend, which is the correct shape for a taper: keep frequency and intensity, cut volume.',
   },
   {
     week: 6,
@@ -431,6 +540,8 @@ export const BLOCK_WEEKS = [
     phase: 'taper',
     targetKm: 60,
     longRunKm: 18,
+    longRunDate: '2026-10-18',
+    longRunOnRace: null,
     minRunDays: 5,
     rampExemption: null,
     days: null,
@@ -441,7 +552,12 @@ export const BLOCK_WEEKS = [
     monday: '2026-10-19',
     phase: 'race',
     targetKm: null,
+    // The marathon is the goal, not a planned training session. It lives in
+    // RACES. Counting it here would put 42.195 into every long-run aggregate
+    // and make the block's peak long run read as the race itself.
     longRunKm: null,
+    longRunDate: null,
+    longRunOnRace: null,
     minRunDays: 3,
     rampExemption: null,
     days: null,
