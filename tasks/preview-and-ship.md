@@ -85,4 +85,4 @@ and only fails during processing.
 
 ## Commits
 
-(populated as work lands)
+- `6278a0e` feat(app): see what the cropper changed before the file leaves your hands
