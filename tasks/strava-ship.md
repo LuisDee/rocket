@@ -96,3 +96,5 @@ error `credentials()` raises when they are unset, which is where someone
 deploying actually meets the problem.
 
 ## Commits
+
+- `a1cc51b` feat: ship an approved run to Strava on a tap
