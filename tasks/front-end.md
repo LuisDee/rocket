@@ -78,4 +78,4 @@ aggregation. No schema change, no config change, no domain change.
 
 ## Commits
 
-(populated as work lands)
+- `5fd85fe` — feat: make Today the landing page, with planned versus actual from the database
