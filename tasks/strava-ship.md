@@ -98,3 +98,4 @@ deploying actually meets the problem.
 ## Commits
 
 - `a1cc51b` feat: ship an approved run to Strava on a tap
+- `c5ca561` fix(app): make both approval-screen links reachable with a thumb
