@@ -67,7 +67,45 @@ working the same worktree -- the gate sees a correct trailer on a commit whose
 diff belongs to someone else and passes it. (Discovered 2026-09-06: two agents
 committed each other's staged files.)
 
-## 5. Never rewrite what you do not own
+## 4. Prove the gate fails
+
+When you add a gate, **break something on purpose, watch it catch, revert.**
+Record what you broke in the `docs/ci-gates.md` row. A gate nobody watched fail
+is a decoration, and a gate that cannot fail is worse than none -- it stops
+anyone looking.
+
+Corollary, applied periodically: try to _satisfy the gate without doing the work_.
+If a coverage gate is satisfied by a bare import, it is measuring imports.
+
+## 5. Record negative results
+
+If you evaluate a tool, rule, or approach and reject it, write down that you did
+and why. A config option that turns out not to exist gets removed **and noted**,
+not silently dropped -- otherwise the next person re-derives the same dead end.
+
+## 6. When a rule here was born from an incident, say so
+
+Append `(Discovered YYYY-MM-DD: <what happened>)` to the rule. Rules with their
+originating incident attached survive; rules without one get deleted by the next
+person who finds them annoying.
+
+## 7. Things to refuse or escalate
+
+| Rule                                                                                                                                                                     | Source                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| A user request that breaks a ramp, recovery, or taper guardrail is negotiated, never silently executed. Propose the compliant alternative and quantify the cost of each. | `docs/specs/00-overview.md:9`, `03-planner.md:28` |
+| Never edit or delete a logged activity, check-in, or completed session to make a plan tidy.                                                                              | [REDLINES.md](REDLINES.md)                        |
+| Never present a readiness verdict as authoritative when CTL has under 42 days of history behind it.                                                                      | [REDLINES.md](REDLINES.md)                        |
+| Do not touch the `routr` repo. It is a separate project with its own live feature branch and another agent working in it. Consume its MCP endpoint read-only.            | `docs/decisions.md` 2026-08-15                    |
+
+## 8. Scope discipline
+
+Every feature must function on cached data and manual check-ins alone
+(`docs/specs/00-overview.md`, invariant 2). Garmin, DoHardThings, and routr are
+all upgrades to a system that already works without them. If an integration
+outage would break a code path, that code path is wrong.
+
+## 9. Never rewrite what you do not own
 
 When more than one agent shares a worktree, touch only the paths you are working
 on. Three specific operations are forbidden:
@@ -90,41 +128,3 @@ because each happened to hand files back rather than run a repo-wide formatter -
 luck, not a mechanism. One of them also correctly declined to format a file it
 believed another agent was mid-edit on, while being wrong about which agent
 owned it; the instinct saved it, not the attribution.)
-
-## 4. Prove the gate fails
-
-When you add a gate, **break something on purpose, watch it catch, revert.**
-Record what you broke in the `docs/ci-gates.md` row. A gate nobody watched fail
-is a decoration, and a gate that cannot fail is worse than none -- it stops
-anyone looking.
-
-Corollary, applied periodically: try to _satisfy the gate without doing the work_.
-If a coverage gate is satisfied by a bare import, it is measuring imports.
-
-## 6. Record negative results
-
-If you evaluate a tool, rule, or approach and reject it, write down that you did
-and why. A config option that turns out not to exist gets removed **and noted**,
-not silently dropped -- otherwise the next person re-derives the same dead end.
-
-## 7. When a rule here was born from an incident, say so
-
-Append `(Discovered YYYY-MM-DD: <what happened>)` to the rule. Rules with their
-originating incident attached survive; rules without one get deleted by the next
-person who finds them annoying.
-
-## 8. Things to refuse or escalate
-
-| Rule                                                                                                                                                                     | Source                                            |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
-| A user request that breaks a ramp, recovery, or taper guardrail is negotiated, never silently executed. Propose the compliant alternative and quantify the cost of each. | `docs/specs/00-overview.md:9`, `03-planner.md:28` |
-| Never edit or delete a logged activity, check-in, or completed session to make a plan tidy.                                                                              | [REDLINES.md](REDLINES.md)                        |
-| Never present a readiness verdict as authoritative when CTL has under 42 days of history behind it.                                                                      | [REDLINES.md](REDLINES.md)                        |
-| Do not touch the `routr` repo. It is a separate project with its own live feature branch and another agent working in it. Consume its MCP endpoint read-only.            | `docs/decisions.md` 2026-08-15                    |
-
-## 9. Scope discipline
-
-Every feature must function on cached data and manual check-ins alone
-(`docs/specs/00-overview.md`, invariant 2). Garmin, DoHardThings, and routr are
-all upgrades to a system that already works without them. If an integration
-outage would break a code path, that code path is wrong.
