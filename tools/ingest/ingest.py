@@ -34,6 +34,7 @@ import io
 import json
 import os
 import re
+import unicodedata
 import subprocess
 import sys
 import uuid
@@ -119,6 +120,21 @@ def heartbeat(conn: Any, ok: bool, detail: str, summary: dict[str, Any]) -> None
 _SLUG = re.compile(r"[^a-z0-9]+")
 
 
+# Garmin's typeKey covers running, treadmill_running, trail_running, track_running,
+# indoor_running and virtual_running. A hike or a swim has no business in a pipeline
+# whose cropper and forensic checks are both tuned for running.
+RUN_TYPES = frozenset({
+    "running", "treadmill_running", "trail_running", "track_running",
+    "indoor_running", "virtual_running", "obstacle_run", "ultra_run",
+})
+
+
+def is_run(activity: dict) -> bool:
+    """True for running activities only. Everything else is skipped, not failed."""
+    key = ((activity.get("activityType") or {}).get("typeKey") or "").lower()
+    return key in RUN_TYPES
+
+
 def slugify(name: str | None) -> str:
     """`run` unless the activity carries a real title.
 
@@ -126,7 +142,12 @@ def slugify(name: str | None) -> str:
     which is a title in the sense the convention means -- so only a blank or
     missing name falls back.
     """
-    slug = _SLUG.sub("-", (name or "").strip().lower()).strip("-")
+    # Fold accents to their ASCII base first. Without this, "Sóller Running"
+    # slugs to "s-ller-running" -- the accented letter is not [a-z0-9] so it
+    # becomes a separator, silently mangling the name of a real run.
+    folded = unicodedata.normalize("NFKD", (name or "").strip().lower())
+    folded = folded.encode("ascii", "ignore").decode("ascii")
+    slug = _SLUG.sub("-", folded).strip("-")
     return slug or "run"
 
 
@@ -309,7 +330,8 @@ def run_once(limit: int) -> int:
             activities = api.get_activities(0, limit)
 
         known = known_ids(conn)
-        fresh = [a for a in activities if str(a["activityId"]) not in known]
+        runs = [a for a in activities if is_run(a)]
+        fresh = [a for a in runs if str(a["activityId"]) not in known]
         workdir = HERE / "work"
         workdir.mkdir(exist_ok=True)
 

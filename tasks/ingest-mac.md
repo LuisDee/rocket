@@ -68,6 +68,12 @@ value, and already in hand from the activity list.
 - [x] gate-ledger rows with their deliberate violations recorded
 - [x] one live run, verified in the approval screen
 
+- [x] Unicode-safe slug: "Sóller Running" produced "s-ller-running" on the first
+      live backlog run; folded to ASCII before slugging. Proven by reverting the
+      fold and watching the test go red.
+- [x] Running-only filter: a hike reached the queue and was cropped by a
+      run-cropper and judged by run heuristics. `is_run()` now gates ingestion.
+
 ## Commits
 
 - `1a5c8b2` feat(ingest): pull, crop and inspect a Garmin run into the review queue

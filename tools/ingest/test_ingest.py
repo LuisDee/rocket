@@ -271,3 +271,36 @@ def test_routr_is_pinned_and_unmodified_by_us():
     # actively developed -- but it must be a deliberate bump with a test run.
     if head != ingest.ROUTR_PINNED_COMMIT:
         pytest.skip(f"routr moved: pinned {ingest.ROUTR_PINNED_COMMIT}, found {head}")
+
+# --- regressions found by the first live runs, 2026-09-07 -------------------
+
+
+def test_accented_name_folds_to_ascii_not_a_separator():
+    """"Sóller Running" produced "s-ller-running" against Luis's real Mallorca run.
+
+    The accented character is not [a-z0-9], so the slug regex treated it as a
+    separator and ate it. Folding to ASCII first keeps the word.
+    """
+    from ingest import slugify
+
+    assert slugify("Sóller Running") == "soller-running"
+    assert slugify("Café Run") == "cafe-run"
+    assert slugify(None) == "run"
+    assert slugify("") == "run"
+
+
+def test_only_running_activities_are_ingested():
+    """A hike reached the queue on the first live run.
+
+    The cropper removes timer pauses from a run and the forensic suite judges
+    heart-rate warm-up shape; neither means anything for a hike, so the findings
+    would be noise presented as signal.
+    """
+    from ingest import is_run
+
+    for key in ("running", "treadmill_running", "trail_running", "virtual_running"):
+        assert is_run({"activityType": {"typeKey": key}}), key
+    for key in ("hiking", "lap_swimming", "cycling", "walking", "strength_training"):
+        assert not is_run({"activityType": {"typeKey": key}}), key
+    assert not is_run({})
+    assert not is_run({"activityType": None})
