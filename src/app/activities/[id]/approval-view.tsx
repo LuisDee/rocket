@@ -6,7 +6,6 @@ import {
   fromInspectorReport,
   notableFindings,
   type CropSummary,
-  type ForensicReport,
 } from '../../../lib/crop';
 import type { IngestRow } from '../../../lib/ingest-store';
 
@@ -228,22 +227,44 @@ export function ApprovalView({
 
         {row.status === 'shipped' ? (
           <p className="text-center text-xs text-emerald-300">
-            Marked as uploaded to Strava.
+            On Strava
+            {row.stravaActivityId ? (
+              <>
+                {' — '}
+                <a
+                  className="underline underline-offset-2"
+                  href={`https://www.strava.com/activities/${row.stravaActivityId}`}
+                >
+                  activity {row.stravaActivityId}
+                </a>
+              </>
+            ) : null}
+            .
+          </p>
+        ) : row.status === 'shipping' ? (
+          <p className="text-center text-xs text-sky-300">
+            Uploading to Strava. Refresh in a moment.
           </p>
         ) : (
           <form action={ship}>
             <button
               type="submit"
-              className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-center text-sm text-zinc-300 ring-1 ring-zinc-800 transition hover:bg-zinc-800"
+              className="w-full rounded-xl bg-[#fc4c02] px-4 py-3.5 text-center text-sm font-medium text-white transition hover:brightness-110"
             >
-              Mark as uploaded
+              Ship to Strava
             </button>
           </form>
         )}
 
+        {row.error ? (
+          <p className="rounded-xl bg-rose-500/10 px-4 py-3 text-center text-xs leading-relaxed text-rose-300 ring-1 ring-rose-500/30">
+            {row.error}
+          </p>
+        ) : null}
+
         <p className="text-center text-xs leading-relaxed text-zinc-500">
-          Rocket does not upload to Strava — download the file and add it in the
-          Strava app. See docs/decisions.md, 2026-09-07.
+          Uploads the cropped file, not the original. Nothing is sent until you
+          tap.
         </p>
       </section>
     </main>

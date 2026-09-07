@@ -1,9 +1,12 @@
+import { revalidatePath } from 'next/cache';
 import { notFound } from 'next/navigation';
 
-import { getActivity, markShipped } from '../../../lib/ingest-store';
+import { getActivity, shipToStrava } from '../../../lib/ingest-store';
 import { ApprovalView } from './approval-view';
 
 export const dynamic = 'force-dynamic';
+/** Strava processes an upload asynchronously; the action polls for it. */
+export const maxDuration = 60;
 
 export default async function ApprovalPage({
   params,
@@ -14,7 +17,9 @@ export default async function ApprovalPage({
 
   async function ship() {
     'use server';
-    await markShipped(id, null);
+    await shipToStrava(id);
+    // The outcome -- id or error -- is on the row; re-render reads it back.
+    revalidatePath(`/activities/${id}`);
   }
 
   return <ApprovalView row={row} ship={ship} />;

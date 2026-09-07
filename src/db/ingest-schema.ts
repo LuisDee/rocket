@@ -38,21 +38,21 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 /**
  * `pending`   cropped and inspected, waiting on a human
  * `reviewed`  Luis has looked and is happy; the file is his to upload
- * `shipped`   he uploaded it to Strava by hand; `strava_activity_id` if he
- *             bothered to copy it back, null if he did not
+ * `shipping`  an upload is in flight; Strava has the file and has not yet
+ *             said what it became
+ * `shipped`   on Strava, `strava_activity_id` recorded
  * `failed`    the crop or the inspection failed, `error` says why
  *
- * The original contract had `approved` / `uploading` / `uploaded`, which
- * assumed rocket would upload. It may not -- see docs/decisions.md, "Strava
- * uploads are prohibited; the pipeline ends at the preview" (2026-09-07) -- so
- * the two states describing an upload in flight have no producer and are gone.
- * The column set is unchanged, so this narrows a vocabulary rather than
- * breaking a schema. `strava_activity_id` stays: which Strava activity a file
- * became is a fact worth recording however it got there.
+ * This vocabulary narrowed on 2026-09-07 when uploads looked prohibited, then
+ * regained `shipping` the same day when Luis read API Policy 5.3 and overrode
+ * it knowingly -- see docs/decisions.md. `shipped` therefore covers both a
+ * rocket upload and one Luis did by hand, which is why `strava_activity_id` is
+ * nullable: he may not bother copying an id back off a URL.
  */
 export const INGEST_STATUSES = [
   'pending',
   'reviewed',
+  'shipping',
   'shipped',
   'failed',
 ] as const;
@@ -88,3 +88,31 @@ export const ingestedActivities = pgTable(
   },
   (t) => [index('ingested_activities_status_idx').on(t.status)],
 );
+
+/**
+ * Third-party OAuth tokens, one row per provider.
+ *
+ * In Postgres rather than a file or an env var for one reason: Strava rotates
+ * the refresh token on every refresh, so the store has to be writable. An env
+ * var would be correct exactly once and stale thereafter.
+ *
+ * It is also what stops the previous loss repeating. The Strava athlete token
+ * lived at `tools/strava_probe/out/token.json`, correctly gitignored; the probe
+ * directory was deleted on policy grounds on 2026-09-07 and the token went with
+ * it, unrecoverable, forcing a re-authorisation.
+ *
+ * Mutable by design, so it carries an explicit UPDATE grant -- see the
+ * migration. Not append-only: a token history is a liability, not an asset.
+ */
+export const oauthTokens = pgTable('oauth_tokens', {
+  /** `strava`, and whatever comes next. */
+  provider: text('provider').primaryKey(),
+  accessToken: text('access_token').notNull(),
+  refreshToken: text('refresh_token').notNull(),
+  /** Strava gives an absolute unix expiry; stored as a timestamp. */
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  scope: text('scope'),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

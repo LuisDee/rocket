@@ -1479,3 +1479,66 @@ creating one. The test that caught it asserts no `quality` session survives in
 the window after a soreness check-in.
 
 **Status:** ACTIVE
+
+---
+
+## 2026-09-07 -- the Strava upload is built anyway, as a ratified policy override
+
+**Context:** the entry above ("Strava uploads are prohibited; the pipeline ends
+at the preview", 2026-09-07) concluded that Policy 5.3 bars rocket from holding
+a Strava API token, and the pipeline was shipped ending at the preview. Luis
+then hit the consequence in practice: his run of 2026-09-07 sat cropped and
+approved in the queue with no way to get it onto Strava except the manual
+download-and-upload the whole feature existed to remove. Told why, he
+responded: "No i think thats rwdiculous. I was going to jump through hoops.
+Ratify the original build. Il take the risk. Its a silly distinction to exclude
+apps that have some ai integration even if the pipeline doing the work is
+deterministic. Build it. Ship it."
+
+**The prohibition has not changed.** Policy 5.3, effective 2026-06-01, still
+reads verbatim: "You may not use the Strava API Materials or Strava Data,
+directly or indirectly, in connection with the development, training,
+evaluation, or operation of any AI Application", with the prohibition extending
+to "ingestion into a context window or working memory". Section 3.5 still makes
+the Strava MCP "the sole authorized first-party agent-mediated interface". The
+analysis in the preceding entry stands in full; nothing in it was found wrong.
+This entry does not reinterpret the policy. It overrides it knowingly.
+
+**Decision:** rocket uploads an approved, cropped FIT to Strava on an explicit
+tap, using a Developer Application token held in Postgres. Luis made the call,
+it is his account and his exposure, and he was told what the exposure is before
+making it. Recording it as a compliance finding and quietly not building the
+feature would have been the dishonest option.
+
+**The exposure, stated plainly.** Strava may revoke the application's API
+access, and may suspend or terminate Luis's Strava account -- the Agreement
+reserves termination at Strava's discretion, and the account carries his entire
+activity history. The risk is not zero merely because the traffic is one athlete
+uploading his own runs. It is accepted, by him, on the record.
+
+**What the override does NOT cover.** Reads. Nothing in rocket calls a Strava
+read endpoint; where Claude needs Strava data it uses the MCP connector under
+the 3.5 carve-out, exactly as the withdrawal entry set out. 5.5 still binds that
+path and nothing persists Strava Data into Neon.
+
+**Alternatives rejected:** (a) a standalone non-AI uploader CLI sitting outside
+the definition of an AI Application -- offered, and Luis judged the distinction
+ridiculous; overriding the policy in the open is more honest than routing around
+it on a technicality nobody believes. (b) Leaving the guard as an outright ban
+and building the upload anyway: a guard contradicting a ratified decision is
+deleted by the first person it stops, and takes the real constraint with it.
+
+**Consequences:** `scripts/check_no_strava_api.py` stops prohibiting and starts
+PINNING -- three files (`src/lib/strava.ts`, its test, `scripts/strava-auth.mts`)
+may hold Strava credentials and endpoints, no other file may, and inside those
+files only `oauth/token`, `oauth/authorize` and `api/v3/uploads` are permitted.
+A read endpoint added to the pinned client fails the build, which is what keeps
+a write-only override write-only. `ingested_activities.status` regains
+`shipping`. The athlete token was deleted with `tools/strava_probe/` earlier the
+same day, so the first upload needs one re-authorisation via
+`npm run strava:auth`; the token now lives in Postgres, where a directory
+deletion cannot take it.
+
+**Status:** ACTIVE, superseding the 2026-09-07 "Strava uploads are prohibited"
+entry. The prohibition entry's legal analysis remains correct and is not
+retracted -- only the decision it drove.
