@@ -63,7 +63,7 @@ export function ApprovalView({
       <header>
         <Link
           href="/activities"
-          className="text-xs text-zinc-500 hover:text-zinc-300"
+          className="-my-3.5 inline-block py-3.5 text-xs text-zinc-500 hover:text-zinc-300"
         >
           &larr; Cropped
         </Link>
@@ -232,7 +232,7 @@ export function ApprovalView({
               <>
                 {' — '}
                 <a
-                  className="underline underline-offset-2"
+                  className="-my-3.5 inline-block py-3.5 underline underline-offset-2"
                   href={`https://www.strava.com/activities/${row.stravaActivityId}`}
                 >
                   activity {row.stravaActivityId}
