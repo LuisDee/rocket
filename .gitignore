@@ -55,3 +55,7 @@ tools/**/out/
 
 # database exports: real training history and check-ins, never committed
 /backups/
+
+# Activity files are GPS traces of real runs. Never commit one.
+*.fit
+*.FIT

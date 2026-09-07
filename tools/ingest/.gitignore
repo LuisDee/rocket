@@ -1,0 +1,4 @@
+# Raw and cropped activity files. These are GPS traces of real runs, usually
+# starting at home. This repository is public; they must never be committed.
+work/
+out/
