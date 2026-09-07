@@ -57,4 +57,4 @@ and its use is justified in the verdict.
 
 ## Commits
 
-(populated as work lands)
+7eececc docs: response ledger for the 2026-09-06 adversarial review
