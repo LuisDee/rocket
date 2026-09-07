@@ -648,6 +648,32 @@ export const READINESS = {
 
   /** Soreness at or above this severity (1-5) blocks all quality work. */
   sorenessBlocksQuality: 3,
+
+  /**
+   * The ranges `subjectiveWeights` has always implied and nothing ever stated.
+   *
+   * Four inputs are weighted into a 0-1 score and no document says what scale
+   * any of them is on -- `check_ins.sleep` is a bare `real`. Written down here
+   * rather than inlined at the one call site because a scale IS a threshold
+   * (REDLINES.md rule 1), and because the alternative was four magic numbers in
+   * a normaliser.
+   *
+   * `worseIsHigh` says which direction is bad, so the normaliser has one
+   * expression instead of a branch per field. Soreness starts at 0 -- "none" is
+   * a real reading, and the 1-5 severity in `sorenessBlocksQuality` describes
+   * soreness that exists.
+   *
+   * PROVISIONAL, all four. These are the first numbers a calibration pass
+   * should move, and the sleep mark in particular is a guess at what a full
+   * night is for this athlete rather than a measurement.
+   */
+  inputScales: {
+    rpeYesterday: { min: 1, max: 10, worseIsHigh: true },
+    soreness: { min: 0, max: 5, worseIsHigh: true },
+    /** Hours. 9 is full marks, not a target. */
+    sleep: { min: 0, max: 9, worseIsHigh: false },
+    motivation: { min: 1, max: 5, worseIsHigh: false },
+  },
 } as const;
 
 /** Shoe policy. docs/specs/06-training-block.md:30-31. */

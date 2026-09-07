@@ -122,3 +122,20 @@ export function formatShortDate(iso: string): string {
     month: 'short',
   });
 }
+
+/**
+ * Today as a `YYYY-MM-DD` London calendar date.
+ *
+ * Everything in this app is a Europe/London calendar date (CLAUDE.md), and the
+ * server this runs on is UTC. `toISOString().slice(0,10)` is therefore wrong for
+ * roughly one hour a day through British Summer Time -- a check-in filed at
+ * 00:30 on the 8th would be stored against the 7th.
+ */
+export function todayInLondon(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+}

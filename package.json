@@ -19,12 +19,15 @@
     "guards": "python3 scripts/check_gate_ledger.py && python3 scripts/test_guards.py"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
     "@vercel/functions": "3.9.5",
     "drizzle-orm": "0.45.2",
+    "mcp-handler": "1.1.0",
     "next": "16.3.1",
     "pg": "8.23.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -43,5 +46,10 @@
   },
   "engines": {
     "node": "24.x"
+  },
+  "overrides": {
+    "mcp-handler": {
+      "@modelcontextprotocol/sdk": "1.29.0"
+    }
   }
 }
