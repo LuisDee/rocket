@@ -58,3 +58,5 @@ and its use is justified in the verdict.
 ## Commits
 
 7eececc docs: response ledger for the 2026-09-06 adversarial review
+
+- `7eececc` docs: response ledger for the adversarial review
