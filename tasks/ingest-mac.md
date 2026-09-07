@@ -78,3 +78,4 @@ value, and already in hand from the activity list.
 
 - `1a5c8b2` feat(ingest): pull, crop and inspect a Garmin run into the review queue
 - `98b28eb` fix(ingest): fold accents before slugging, and ingest runs only
+- `ee32071` fix(ingest): stop tracking activity files, and ignore them everywhere
