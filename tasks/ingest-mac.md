@@ -70,4 +70,4 @@ value, and already in hand from the activity list.
 
 ## Commits
 
-(populated as work lands)
+- `1a5c8b2` feat(ingest): pull, crop and inspect a Garmin run into the review queue
