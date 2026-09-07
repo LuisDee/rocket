@@ -88,4 +88,5 @@ status.
 
 ## Commits
 
-(populated as work lands)
+- `5751538` feat: rendered-viewport gate at phone width -- config, spec,
+  fixtures, CI job, ledger row, and the soreness-pill defect it found.
