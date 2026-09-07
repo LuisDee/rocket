@@ -13,7 +13,6 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { mondayOf } from './planner/dates';
 import type { PlannedSession as PlannerSession } from './planner/types';
 import type { Store } from './store';
 import type {

@@ -175,6 +175,18 @@ export const GUARDRAILS = {
   singleSessionSpikePct: 110,
 
   /**
+   * The trailing window the spike baseline is drawn from, in days.
+   *
+   * 30 because that is the window Nielsen 2025 measured on -- it is the rule's
+   * own definition, not a tuning knob. It lives here rather than as a default
+   * argument because a caller loading completed history to evaluate the rule
+   * has to know how far back to reach, and a number only the function knows
+   * cannot be read from the outside (found 2026-09-07 wiring the MCP tools:
+   * the history fetch had no config number to size itself from).
+   */
+  singleSessionSpikeWindowDays: 30,
+
+  /**
    * Above this weekly volume, the week must be spread across at least
    * `minRunDaysAtHighVolume` running days.
    *
@@ -243,7 +255,10 @@ export const GUARDRAILS = {
  */
 export const GUARDRAIL_RULE_IDS = {
   'weekly-ramp-cap': ['rampCapPct', 'aggressiveRampCapPct', 'rampMode'],
-  'single-session-spike': ['singleSessionSpikePct'],
+  'single-session-spike': [
+    'singleSessionSpikePct',
+    'singleSessionSpikeWindowDays',
+  ],
   'high-volume-spread': ['highVolumeThresholdKm', 'minRunDaysAtHighVolume'],
   'weekly-recovery-days': ['minRestOrSwimOnlyDaysPerWeek'],
   'quality-session-budget': [
@@ -328,7 +343,7 @@ function raceDistanceOn(date: string): number | null {
 
 export function singleSessionSpikes(
   sessions: readonly SpikeSession[],
-  windowDays = 30,
+  windowDays: number = GUARDRAILS.singleSessionSpikeWindowDays,
 ): SpikeBreach[] {
   const inDateOrder = [...sessions].sort((a, b) =>
     a.date.localeCompare(b.date),

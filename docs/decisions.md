@@ -1140,3 +1140,31 @@ fallback, which is a reason to land the backfill rather than a reason to trust
 the number.
 
 **Status:** ACTIVE
+
+---
+
+## 2026-09-07 -- the spike window becomes config data, and the tool lookback is 30 days
+
+**Context:** `singleSessionSpikes()` took its 30-day trailing window as a
+default argument, so the number existed only inside the function. A caller
+loading completed history to evaluate the rule has to know how far back to
+reach, and could not read it from anywhere.
+
+**Decision:** `GUARDRAILS.singleSessionSpikeWindowDays: 30`, claimed by the
+`single-session-spike` rule id, and the function defaults to it. The MCP tool
+layer sizes its `store.completedRuns()` fetch from the same constant.
+
+**Alternatives rejected:** a literal 30 (or 60) in the tool layer. That is
+exactly REDLINES rule 1's failure mode -- a training number outside
+`config/training.ts` where it cannot be audited or tuned -- and the two copies
+would drift the first time the window changed. This corrects the "60 days" in
+the same-day entry above, which was written before the constant existed:
+the lookback is the spike rule's own window, which is the longer of the two
+baselines and so covers the ramp cap's week as well.
+
+**Consequences:** changing the window now changes both the rule and the history
+fetch from one place. 30 is the rule's own definition (Nielsen 2025 measured on
+it), not a tuning knob, so it is ACTIVE rather than PROVISIONAL even though the
+percentage beside it is provisional.
+
+**Status:** ACTIVE

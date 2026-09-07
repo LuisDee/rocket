@@ -67,6 +67,16 @@ export default function Home() {
           </span>
         </div>
 
+        <a
+          href="/checkin"
+          className="mt-4 flex items-center justify-between rounded-xl bg-sky-500/10 px-4 py-3 text-sm font-medium text-sky-300 ring-1 ring-sky-500/30 active:bg-sky-500/20"
+        >
+          <span>Morning check-in</span>
+          <span aria-hidden className="text-sky-400">
+            &rarr;
+          </span>
+        </a>
+
         <p className="mt-3 text-sm text-zinc-400">
           Next up:{' '}
           <span className="text-zinc-200">
