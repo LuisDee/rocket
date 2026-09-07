@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { BLOCK, BLOCK_WEEKS, MEASURED_BASE } from '../../config/training';
 import recentActivities from '../data/recent-activities.json';
 import {
@@ -211,6 +213,15 @@ export default function Home() {
           longest {MEASURED_BASE.longestRecentKm} km
         </p>
       </section>
+
+      <nav className="mt-9">
+        <Link
+          href="/activities"
+          className="block rounded-xl bg-zinc-900/60 px-4 py-3 text-sm text-zinc-300 ring-1 ring-zinc-800 transition hover:bg-zinc-900 hover:ring-zinc-700"
+        >
+          Cropped runs waiting for you &rarr;
+        </Link>
+      </nav>
 
       <footer className="mt-9 rounded-xl border border-dashed border-zinc-800 px-4 py-3">
         <p className="text-xs leading-relaxed text-zinc-500">

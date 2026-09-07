@@ -37,16 +37,23 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 
 /**
  * `pending`   cropped and inspected, waiting on a human
- * `approved`  tapped, not yet sent (the window where a crash must not re-send)
- * `uploading` handed to Strava, awaiting its asynchronous verdict
- * `uploaded`  done, `strava_activity_id` set
- * `failed`    Strava refused or we gave up, `error` says why
+ * `reviewed`  Luis has looked and is happy; the file is his to upload
+ * `shipped`   he uploaded it to Strava by hand; `strava_activity_id` if he
+ *             bothered to copy it back, null if he did not
+ * `failed`    the crop or the inspection failed, `error` says why
+ *
+ * The original contract had `approved` / `uploading` / `uploaded`, which
+ * assumed rocket would upload. It may not -- see docs/decisions.md, "Strava
+ * uploads are prohibited; the pipeline ends at the preview" (2026-09-07) -- so
+ * the two states describing an upload in flight have no producer and are gone.
+ * The column set is unchanged, so this narrows a vocabulary rather than
+ * breaking a schema. `strava_activity_id` stays: which Strava activity a file
+ * became is a fact worth recording however it got there.
  */
 export const INGEST_STATUSES = [
   'pending',
-  'approved',
-  'uploading',
-  'uploaded',
+  'reviewed',
+  'shipped',
   'failed',
 ] as const;
 
