@@ -104,4 +104,4 @@ easy | absorbed`, but the config emits `tune-up` and `dropped`. There is no
 
 ## Commits
 
-(populated as work lands)
+- `b75508a` feat(db): apply the migrations to Neon, seed the block, and prove the guards bite
