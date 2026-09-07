@@ -79,3 +79,4 @@ aggregation. No schema change, no config change, no domain change.
 ## Commits
 
 - `5fd85fe` — feat: make Today the landing page, with planned versus actual from the database
+- `695fc1c` — docs: track the dual-source run bridge and the missing viewport sweep as gates
