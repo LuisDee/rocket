@@ -73,8 +73,11 @@ aggregation. No schema change, no config change, no domain change.
       `check_no_strava_api.py` is RED, entirely on strava-ship's files
       (`src/lib/strava.ts`, `scripts/strava-auth.mts`, `approval-view.tsx`,
       `src/db/ingest-schema.ts`) — nothing in this task touches them. Raised
-      with that agent and with the parent session; it must be green before
-      either branch merges.
+      it; the answer is that the red is expected. Luis read Strava API Policy
+      5.3 and overrode it knowingly on 2026-09-07, superseding the earlier
+      prohibition, and strava-ship's final step repurposes that guard so the
+      sanctioned upload module passes while a Strava call anywhere else still
+      fails. Not this branch's to resolve; the red clears when that lands.
 
 ## Commits
 
