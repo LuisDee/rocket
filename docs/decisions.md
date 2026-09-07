@@ -665,3 +665,57 @@ committed block, so it is a standing hazard rather than a one-off. It is the
 concrete argument for the review's F26 seam.
 
 **Status:** ACTIVE
+
+## 2026-09-07 -- the Strava API is withdrawn; the MCP carve-out is the only Strava path
+
+**Context:** the adversarial review (F17) flagged Strava's API Policy. Verified
+against the primary source at <https://www.strava.com/legal/api_policy>, not the
+review's appendix. Section 5.3, effective 2026-06-01, reads verbatim: "You may
+not use the Strava API Materials or Strava Data, directly or indirectly, in
+connection with the development, training, evaluation, or operation of any AI
+Application", extended to "any data derived from, aggregated from, anonymized
+from, or generated using Strava Data, in any form" and to "grounding,
+evaluation, benchmarking, embedding generation, retrieval-augmented generation".
+rocket is a coach whose reasoning is an LLM reading training history: grounding,
+named explicitly. The policy does not define "AI Application", which cuts against
+a narrow reading rather than for it -- the drafters wrote an explicit carve-out
+for the personal-own-data case, which they would not have needed if single-user
+use already fell outside 5.3.
+
+**Decision:** `tools/strava_probe/` (174 lines) and `docs/STRAVA_SETUP.md` are
+deleted. rocket holds no Strava API credentials and registers no Strava
+application. Where Claude needs Strava streams it reads them through the official
+Strava MCP connector under the same policy's carve-out -- "This prohibition does
+not extend to use of the Strava MCP" / "Subscribers to Strava may access the
+Strava MCP in connection with their personal use of their own Strava data" --
+which is Luis's own subscription, his own data, and is confirmed live on this
+account. That path is unaffected by this entry.
+
+**Alternatives rejected:** keeping the probe unwired behind a comment. Section
+5.3 prohibits the materials in connection with the _operation_ of an AI
+application, and a registered application holding a live refresh token is
+operation; dead code carrying a licence liability is the worst of both. Also
+rejected: reading the single-user case as outside "AI Application" -- undefined
+terms are read broadly when the cost of compliance is zero, and here it is zero,
+because Garmin is primary anyway and the MCP returns richer data (per-second
+streams, zones) than the API tier the probe held.
+
+**Consequences:** the two justifications the deleted doc gave for existing were
+both false. A fallback activity feed is grounding under 5.3. Publishing routes is
+not a capability the API has at all -- verified at
+<https://developers.strava.com/docs/reference/>, the Routes resource exposes only
+`GET /routes/{id}`, `GET /routes?athlete_id=`, `export_gpx` and `export_tcx`, no
+write verb. So routr delivers GPX and a Strava route is created by hand in
+Strava's web UI, which is how DoHardThings' `stravaRouteUrl` fields are populated
+today. Coupling cost of the deletion is zero: nothing under `src/` or `scripts/`
+referenced the probe. What it makes hard: any future automated upload of a
+finished activity file to Strava, which `tasks/preview-and-ship.md` currently
+specifies against `POST /api/v3/uploads` -- that path needs re-reading against 5.3
+before it is built, and it is not this entry's to decide.
+
+**Left to Luis, not done by an agent:** revoke the Strava API application at
+<https://www.strava.com/settings/api>, and remove the `pass` entries
+`strava/client-id` and `strava/client-secret`. Until both are done the
+application still exists under his account.
+
+**Status:** ACTIVE

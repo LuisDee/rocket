@@ -62,6 +62,11 @@ Every commit carries a `Task: tasks/<slug>.md` trailer and is appended to that
 file's `## Commits` section before push. Mechanically enforced by
 `scripts/check_task_trace.py` on pre-push, fails closed.
 
+Stage with explicit paths, never `git add -A`, whenever another agent may be
+working the same worktree -- the gate sees a correct trailer on a commit whose
+diff belongs to someone else and passes it. (Discovered 2026-09-06: two agents
+committed each other's staged files.)
+
 ## 4. Prove the gate fails
 
 When you add a gate, **break something on purpose, watch it catch, revert.**
