@@ -65,4 +65,4 @@ register row, not for the implementation.
 
 ## Commits
 
-(populated as work lands)
+- `45a3875` docs: independent verification of the response ledger against the branch
