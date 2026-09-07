@@ -14,7 +14,13 @@ import { BLOCK, BLOCK_WEEKS } from '../../config/training';
 export type BlockWeek = (typeof BLOCK_WEEKS)[number];
 
 /** Days from `today` to the goal race. Negative once it is behind us. */
-export function daysToRace(today: Date, raceDate = BLOCK.goalRaceDate): number {
+export function daysToRace(
+  today: Date,
+  // Annotated `string` rather than inferred: the inferred type is the literal
+  // goal-race date, which refuses any other race and makes the parameter
+  // useless for the countdown to the next fixture.
+  raceDate: string = BLOCK.goalRaceDate,
+): number {
   return daysBetween(today, parseIsoDate(raceDate));
 }
 
@@ -59,6 +65,25 @@ export function plannedTotalKm(): number {
 export function parseIsoDate(iso: string): Date {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1);
+}
+
+/**
+ * Format a Date as a `YYYY-MM-DD` local calendar date -- the inverse of
+ * `parseIsoDate`, and paired with it deliberately.
+ *
+ * `toISOString().slice(0,10)` is the obvious one-liner and is wrong here for
+ * the same reason `parseIsoDate` exists: it converts to UTC first, so a date
+ * built as local midnight in British Summer Time formats as the day before.
+ */
+export function toIsoDate(date: Date): string {
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${m}-${day}`;
+}
+
+/** `today` shifted by whole days, as a `YYYY-MM-DD` calendar date. */
+export function shiftIsoDate(iso: string, days: number): string {
+  return toIsoDate(addDays(parseIsoDate(iso), days));
 }
 
 function startOfDay(date: Date): Date {

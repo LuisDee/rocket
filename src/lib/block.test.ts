@@ -7,6 +7,8 @@ import {
   formatDuration,
   formatPace,
   parseIsoDate,
+  shiftIsoDate,
+  toIsoDate,
 } from './block';
 
 /**
@@ -101,5 +103,30 @@ describe('formatting', () => {
 
   it('drops the hour component under an hour', () => {
     expect(formatDuration(1530)).toBe('25:30');
+  });
+});
+
+describe('toIsoDate / shiftIsoDate', () => {
+  it('round-trips parseIsoDate across the October clock change', () => {
+    // British Summer Time ends on 25 October 2026, and this block runs through
+    // it. `parseIsoDate` builds local midnight, which on that morning is still
+    // BST and therefore 23:00 UTC on the 24th -- so the obvious
+    // `toISOString().slice(0, 10)` hands back the wrong day. This pins the
+    // pairing rather than the implementation.
+    for (const iso of ['2026-10-24', '2026-10-25', '2026-10-26']) {
+      expect(toIsoDate(parseIsoDate(iso))).toBe(iso);
+    }
+  });
+
+  it('counts days on the calendar across the clock change, not in hours', () => {
+    // The 25th is a 25-hour day. Millisecond arithmetic lands at 23:00 on the
+    // 25th and truncates back to the 25th, losing a day.
+    expect(shiftIsoDate('2026-10-24', 1)).toBe('2026-10-25');
+    expect(shiftIsoDate('2026-10-25', 1)).toBe('2026-10-26');
+    expect(shiftIsoDate('2026-10-26', -1)).toBe('2026-10-25');
+  });
+
+  it('shifts backwards across a month boundary', () => {
+    expect(shiftIsoDate('2026-11-01', -1)).toBe('2026-10-31');
   });
 });
