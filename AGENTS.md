@@ -67,6 +67,30 @@ working the same worktree -- the gate sees a correct trailer on a commit whose
 diff belongs to someone else and passes it. (Discovered 2026-09-06: two agents
 committed each other's staged files.)
 
+## 5. Never rewrite what you do not own
+
+When more than one agent shares a worktree, touch only the paths you are working
+on. Three specific operations are forbidden:
+
+- `git add -A` -- stages another agent's work under your commit and your task
+  trailer. Stage explicit paths.
+- `prettier --write .` or any repo-wide formatter -- silently rewrites files
+  nobody asked you to touch, and formatting somebody's half-written file
+  produces a mangled diff and unclear blame. Format only what you changed.
+- Any repo-wide codemod or rename for the same reason.
+
+If a file you do not own is broken or unformatted, say so in your report and
+leave it. Reporting costs a line; a mangled diff costs an afternoon.
+
+(Discovered 2026-09-06: two agents ran `git add -A` concurrently and each
+committed the other's staged files, so `758a2dc` carries the garmin-hardening
+diff under a macro-replan message. Reinforced 2026-09-07: three agents wrote to
+`docs/ci-gates.md` and `package.json` within an hour and nothing was lost only
+because each happened to hand files back rather than run a repo-wide formatter --
+luck, not a mechanism. One of them also correctly declined to format a file it
+believed another agent was mid-edit on, while being wrong about which agent
+owned it; the instinct saved it, not the attribution.)
+
 ## 4. Prove the gate fails
 
 When you add a gate, **break something on purpose, watch it catch, revert.**
@@ -77,19 +101,19 @@ anyone looking.
 Corollary, applied periodically: try to _satisfy the gate without doing the work_.
 If a coverage gate is satisfied by a bare import, it is measuring imports.
 
-## 5. Record negative results
+## 6. Record negative results
 
 If you evaluate a tool, rule, or approach and reject it, write down that you did
 and why. A config option that turns out not to exist gets removed **and noted**,
 not silently dropped -- otherwise the next person re-derives the same dead end.
 
-## 6. When a rule here was born from an incident, say so
+## 7. When a rule here was born from an incident, say so
 
 Append `(Discovered YYYY-MM-DD: <what happened>)` to the rule. Rules with their
 originating incident attached survive; rules without one get deleted by the next
 person who finds them annoying.
 
-## 7. Things to refuse or escalate
+## 8. Things to refuse or escalate
 
 | Rule                                                                                                                                                                     | Source                                            |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
@@ -98,7 +122,7 @@ person who finds them annoying.
 | Never present a readiness verdict as authoritative when CTL has under 42 days of history behind it.                                                                      | [REDLINES.md](REDLINES.md)                        |
 | Do not touch the `routr` repo. It is a separate project with its own live feature branch and another agent working in it. Consume its MCP endpoint read-only.            | `docs/decisions.md` 2026-08-15                    |
 
-## 8. Scope discipline
+## 9. Scope discipline
 
 Every feature must function on cached data and manual check-ins alone
 (`docs/specs/00-overview.md`, invariant 2). Garmin, DoHardThings, and routr are
