@@ -147,4 +147,4 @@ record-and-decline stub the header describes.
 
 ## Commits
 
-(populated as work lands)
+1d8fd5d feat(mcp): the rocket_ tool surface, its bearer gate, and the daily check-in
