@@ -92,3 +92,6 @@ asserted as proven.
   stack facts. All nine checklist items; seven gates green before commit
   (`typecheck`, `lint`, `format:check`, `test`, `check_gate_ledger.py`,
   `test_guards.py` 12/12, `check_task_trace.py --range main..HEAD`).
+- `bc9c3e5` — docs: resolve the out-of-scope contradiction the F32 gate creates.
+  The scope block still read "MCP is the only interface in M1" against a gate
+  requiring the page to accept a check-in by 2026-09-14.
