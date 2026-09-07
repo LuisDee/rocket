@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Every 30 minutes, while the Mac is awake. NOT installed by this repo:
+  copy it to ~/Library/LaunchAgents/ and load it deliberately. See
+  docs/INGEST_OPERATOR_GUIDE.md.
+
+  30 minutes is chosen against the guard's data budget (600 calls/day), not
+  against Garmin's appetite: a pass costs 2 calls plus 1 per new activity, so
+  48 passes a day is under 10% of budget even on a day with several runs.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.rocket.ingest</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-lc</string>
+    <string>cd ~/dev/rocket/.worktrees/m1-core-loop/tools/ingest &amp;&amp; uv run ingest.py --once</string>
+  </array>
+  <key>StartInterval</key><integer>1800</integer>
+  <key>RunAtLoad</key><false/>
+  <key>StandardOutPath</key><string>/tmp/rocket-ingest.log</string>
+  <key>StandardErrorPath</key><string>/tmp/rocket-ingest.err</string>
+</dict>
+</plist>

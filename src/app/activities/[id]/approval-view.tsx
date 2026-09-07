@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { formatDuration, formatShortDate } from '../../../lib/block';
 import {
   cropDelta,
+  fromInspectorReport,
   notableFindings,
   type CropSummary,
   type ForensicReport,
@@ -56,7 +57,7 @@ export function ApprovalView({
 }) {
   const summary = row.cropSummary as CropSummary | null;
   const delta = summary ? cropDelta(summary) : null;
-  const findings = notableFindings(row.forensicReport as ForensicReport | null);
+  const findings = notableFindings(fromInspectorReport(row.forensicReport));
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 pb-16 pt-8 sm:px-6">

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cropDelta,
   DISTANCE_ANOMALY_KM,
+  fromInspectorReport,
   notableFindings,
   type CropSummary,
 } from './crop';
@@ -117,5 +118,59 @@ describe('notableFindings', () => {
     expect(notableFindings(null)).toEqual([]);
     expect(notableFindings(undefined)).toEqual([]);
     expect(notableFindings({})).toEqual([]);
+  });
+});
+
+describe('fromInspectorReport', () => {
+  // Shape captured verbatim from `inspect_fit.py --quiet` on a real activity,
+  // 2026-09-07. The reader and the tool drifted once already and nothing caught
+  // it, because the failure was an empty list rather than an error.
+  const real = {
+    anomaly_score: 0.09,
+    worst_severity: 'medium',
+    module_reports: [
+      {
+        module: 'structural',
+        results: [
+          {
+            name: 'structural.header_and_crc',
+            status: 'ok',
+            severity: 'info',
+            rationale: 'header size, data_size, header CRC, file CRC all valid',
+          },
+          {
+            name: 'kinematic.pace_outliers',
+            status: 'anomaly',
+            severity: 'medium',
+            rationale: 'two samples above plausible pace',
+          },
+        ],
+      },
+    ],
+  };
+
+  it('reads the snake_case shape the inspector actually emits', () => {
+    const r = fromInspectorReport(real);
+    expect(r?.worstSeverity).toBe('medium');
+    expect(r?.anomalyScore).toBe(0.09);
+    expect(r?.findings).toHaveLength(2);
+  });
+
+  it('surfaces a real finding rather than silently showing none', () => {
+    // The regression itself: before this, notableFindings returned [] for every
+    // activity because `findings` never existed on the stored object.
+    const notable = notableFindings(fromInspectorReport(real));
+    expect(notable.map((f) => f.check)).toEqual(['kinematic.pace_outliers']);
+    expect(notable[0]?.detail).toContain('plausible pace');
+  });
+
+  it('passes through a report already in our shape', () => {
+    const ours = { worstSeverity: 'high', findings: [] };
+    expect(fromInspectorReport(ours)).toBe(ours);
+  });
+
+  it('returns null for a missing report', () => {
+    expect(fromInspectorReport(null)).toBeNull();
+    expect(fromInspectorReport(undefined)).toBeNull();
   });
 });

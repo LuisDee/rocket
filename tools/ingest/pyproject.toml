@@ -1,0 +1,15 @@
+[project]
+name = "rocket-ingest"
+version = "0.1.0"
+description = "Poll Garmin for new activities, crop and inspect them, queue for review."
+requires-python = ">=3.12"
+dependencies = [
+    # Same floor-and-ceiling reasoning as tools/garmin_probe: Garmin has broken
+    # this client twice in 12 months and both fixes shipped as patch releases.
+    # An exact pin converts a 3-day upstream outage into an indefinite one.
+    "garminconnect>=0.3.10,<0.4",
+    "psycopg[binary]>=3.2",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
