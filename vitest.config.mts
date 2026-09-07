@@ -12,6 +12,11 @@ export default defineConfig({
       // these files. Without this, a run from the main checkout picks up a
       // branch's tests mid-edit and fails on work that is not even ours.
       '.worktrees/**',
+      // The integration suite needs a database. It runs from
+      // vitest.integration.config.mts, which throws rather than skips when
+      // DATABASE_URL is absent; picking it up here would make `npm run test`
+      // fail on a machine with no database, which is the wrong gate.
+      '**/*.integration.test.ts',
     ],
   },
 });

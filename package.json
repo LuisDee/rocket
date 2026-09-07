@@ -11,6 +11,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.mts",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "node src/db/seed.mts",
+    "db:export": "node src/db/export.mts",
     "test:watch": "vitest",
     "guards": "python3 scripts/check_gate_ledger.py && python3 scripts/test_guards.py"
   },

@@ -100,6 +100,48 @@ jobs:
       - run: npm ci
       - run: npm run test
 
+  # The append-only guards are a property of the DATABASE, not of application
+  # code, so nothing above this job can see them. It runs the real migrations
+  # against a real Postgres and then asserts on SQLSTATE.
+  #
+  # The image is pinned by DIGEST, not by tag (REDLINES.md). The discipline
+  # kit's own example tag-pins its service container, contradicting its own
+  # rule; that part was deliberately not copied.
+  #
+  # `POSTGRES_HOST_AUTH_METHOD: trust` rather than a password, so no credential
+  # -- not even a throwaway one -- appears in a committed file.
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280 # postgres:18
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: rocket
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Ephemeral CI database: one host, so both URLs are the same. Against
+      # Neon they are not, and mixing them up is the classic failure.
+      DATABASE_URL: postgres://postgres@localhost:5432/rocket
+      DATABASE_URL_UNPOOLED: postgres://postgres@localhost:5432/rocket
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run db:migrate
+      # No skipIf anywhere in this suite: globalSetup THROWS on a missing
+      # DATABASE_URL, so a misconfigured job is red rather than green-and-empty.
+      - run: npm run test:integration
+
   secrets-scan:
     runs-on: ubuntu-latest
     steps:

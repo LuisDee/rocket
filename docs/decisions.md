@@ -891,3 +891,52 @@ the race it contains. Both are advisory and neither blocks. Four tests fail if t
 old date-level exemption is restored.
 
 **Status:** ACTIVE
+
+## 2026-09-07 -- the append-only guard binds the app role absolutely and the owner only against accident
+
+**Context:** `0001_append_only_guards.sql` claimed a verification against Neon in
+its own header comments, but left no artefact -- no test, no transcript, nothing
+a later reader could re-run. The claim was checked against the live database and
+is now backed by `src/db/guards.integration.test.ts`. Two things came out of it
+that the comments did not say.
+
+First, the guard's actual limit. Neon has no true superuser, and the table owner
+is refused `session_replication_role = replica` (SQLSTATE 42501), so the
+`ENABLE ALWAYS` triggers cannot be switched off that way. But the owner owns the
+tables, and `ALTER TABLE activities DISABLE TRIGGER activities_append_only`
+succeeds: with it disabled, `UPDATE 1` went through and the row read back
+changed. The protection is therefore asymmetric, and the header comment's
+"binds the OWNER too" is true only of accidental mutation.
+
+Second, the migration bookkeeping. The brief for this task stated that none of
+the three migrations had ever run. `drizzle.__drizzle_migrations` held rows for
+0000 and 0001, and all four guard triggers were present and `tgenabled = 'A'`.
+Only 0002 was outstanding.
+
+**Decision:** the asymmetry is accepted rather than closed, and stated plainly
+instead of being described as symmetric. `app_rw` is bound absolutely -- it holds
+only SELECT and INSERT on the history tables and cannot grant itself more. The
+owner is bound against accident, which is the failure this project actually has:
+an adaptation path editing a logged run to make a plan tidy, not an attacker who
+has the owner credential and is writing DDL. A `tgenabled = 'A'` assertion runs
+in CI so a trigger left disabled after such a bypass is caught, and a
+characterisation test asserts the bypass itself, so a future Neon change that
+closes it shows up as a failing test rather than going unnoticed.
+
+**Alternatives rejected:** an `sql_drop` event trigger, already rejected in
+0001's own header and still rejected -- it blocks legitimate teardown including a
+future migration, and its protection is against an actor who can equally drop the
+event trigger first. Connecting the app as a role that does not own the tables,
+which is the real fix and is blocked on a deployment existing: `app_rw` is
+`NOLOGIN` on purpose so no committed artefact ever generates a credential. Also
+rejected: re-running the applied migrations to match the brief's account of the
+database, which would have been writing to make a document true (AGENTS.md
+section 1 -- the database describes reality).
+
+**Consequences:** the append-only gate moves to IMPLEMENTED in
+`docs/ci-gates.md` with its limit recorded in the row rather than in a comment
+nobody reads. Giving `app_rw` a password at deploy time and pointing the app at
+it is now the single change that would make the guard symmetric for the
+application, and `.env.example` carries the one-liner.
+
+**Status:** ACTIVE

@@ -10,6 +10,10 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "noEmit": true,
+    // A node-run CLI resolves relative imports by their real extension, and
+    // node needs `./x.ts` spelled out. Without this tsc rejects that specifier
+    // (TS5097). Safe only alongside noEmit, which is set above.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

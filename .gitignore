@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the one that carries variable NAMES and no values. REDLINES.md
+# rule 5 bans secrets in source; it does not ban documenting what to set.
+!.env.example
 
 # vercel
 .vercel
@@ -49,3 +52,6 @@ __pycache__/
 # python harness venvs and probe output (health data + live tokens)
 tools/**/.venv/
 tools/**/out/
+
+# database exports: real training history and check-ins, never committed
+/backups/
