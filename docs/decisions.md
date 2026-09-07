@@ -1195,3 +1195,165 @@ and six is what it gets). Luis should ratify either the six-day peak or a change
 to the recovery minimum before the week of 28 September.
 
 **Status:** ACTIVE -- needs Luis's ratification before 2026-09-28
+
+---
+
+## 2026-09-07 -- the connector needs no OAuth server, and the question is closed
+
+**Context:** Luis reversed the post-race deferral: he wants rocket on his phone
+before the race. The standing assumption, written into `src/mcp/auth.ts`, was
+that the claude.ai custom-connector UI "has no header field" and that reaching
+the phone would therefore mean porting DoHardThings' `lib/mcp-oauth.ts` -- a
+stateless HS256 authorization server, roughly 227 lines plus five routes. That
+assumption was never checked against Anthropic's documentation. It is wrong in
+one direction and irrelevant in the other, and this entry exists so nobody
+re-derives it.
+
+**What the dialog actually offers.** Anthropic's connector documentation
+(`claude.com/docs/connectors/custom/remote-mcp`) describes an **Authentication**
+selector with exactly three choices:
+
+- **Always required** -- each user signs in through the server's OAuth flow.
+- **Required when the server asks** -- Claude connects without credentials and
+  prompts when the server asks.
+- **None** -- "no sign-in. Anyone with access to the server URL can use the
+  connector. If the server uses an API key, choose None and add the key under
+  **Request headers**; Claude stores it as the connector's credential."
+
+Custom connectors are available on Free, Pro and Max via **Customize >
+Connectors**, so none of this is Team/Enterprise-only. A separate **Request
+headers** section takes a fixed credential; `authorization` and `x-api-key` are
+on the standard list and need no approval. It is, however, **beta and
+"available to a limited set of organizations"** -- absent from the dialog if the
+account does not have it, which cannot be established from outside the account.
+
+**Decision:** no OAuth server. `Authentication: None`, with the shared secret in
+the connector URL as `?token=`, which `src/mcp/auth.ts` has accepted since it was
+written. Zero production code changes. If `Request headers` is present, use it
+instead with `authorization: Bearer <token>` -- also already accepted, also zero
+code. The runbook is `docs/STARTUP_ACCESS.md` step 7.
+
+**Alternatives rejected:** (a) Porting `mcp-oauth.ts`. Its precondition is
+false, and it is an authorization server, a Google sign-in dependency and five
+routes to replace a working shared secret eleven days before a race. (b) Making
+`Request headers` the instruction. It may not exist in the dialog, and reaching
+it requires the dialog's URL probe to succeed -- an unauthenticated probe of
+`/api/mcp/mcp` returns a bare 401 with no `WWW-Authenticate`, which Anthropic's
+troubleshooting page says ends in "Couldn't reach the MCP server". A URL
+carrying `?token=` authenticates the probe itself, so the two-step dialog gets
+past its first screen. (c) Adding `WWW-Authenticate` to the 401 so the header
+path probes cleanly -- rejected for the reason already in `src/mcp/auth.ts`: it
+makes claude.ai start dynamic client registration against a sign-in service this
+app does not host.
+
+**Carried forward for whoever does build OAuth, so the finding is not lost.**
+DoHardThings' authorize route (`app/api/mcp/oauth/authorize/route.ts:42-57`)
+mints an authorization code for **any** Google account that completes sign-in.
+There is no allowlist and no `signIn` callback in its `lib/auth.ts`. For a
+single-user private app that is a hole: anyone with a Google account who reaches
+the authorize URL gets a code. Any port must check an owner-email allowlist
+**before** issuing the code, with a negative test asserting a non-owner is
+refused. The `typ` claim separating `code` from `access` must also be carried --
+without it an authorization code, which travels in a redirect URL and through
+browser history, is accepted as a bearer token. Neither of these is fixed here,
+because no OAuth code is being written; both are recorded so a future port
+starts from the corrected version rather than the one on disk.
+
+**Consequences:** a 256-bit secret travels in a URL. Anthropic advises against
+it and the MCP authorization specification prohibits access tokens in the query
+string, both because URLs land in logs, proxies and history. Accepted knowingly
+for one private single-user endpoint, with the upgrade path named. Rotation
+means changing `MCP_BEARER_TOKEN` **and re-adding the connector**, because
+authentication settings cannot be edited after a connector is added. The real
+remaining blocker is not authentication at all: there is no `rocket` project
+under `luisdees-projects`, so there is no URL to paste yet.
+
+**Status:** ACTIVE
+
+---
+
+## 2026-09-07 -- Strava uploads are prohibited; the pipeline ends at the preview
+
+**Context:** `tasks/preview-and-ship.md` scopes a `POST /api/ship` that uploads
+an approved, cropped FIT file to Strava, and `src/db/ingest-schema.ts` already
+carries `uploading` / `uploaded` states and a `strava_activity_id` column. The
+2026-09-07 withdrawal covered _reading_ Strava. Whether _writing_ survives it was
+never settled, and it decides whether that feature can exist at all. Settled here
+against the primary documents rather than against recollection of them.
+
+**What the documents say.** Strava API Policy (2026), effective 2026-06-01:
+
+- **5.3:** "You may not use the Strava API Materials or Strava Data, directly or
+  indirectly, in connection with the development, training, evaluation, or
+  operation of any AI Application." The prohibition extends to "embedding
+  generation, retrieval-augmented generation, **ingestion into a context window
+  or working memory**, and any other activity intended or reasonably likely to
+  develop, improve, evaluate, or operate an AI Application."
+- **5.3, exception:** "This prohibition does not extend to use of the Strava
+  MCP, as discussed above in Section 3.5."
+- **3.5:** the Strava MCP is "the sole authorized first-party agent-mediated
+  interface to the Strava Platform". Subscribers "may access the Strava MCP in
+  connection with their personal use of their own Strava data ... and may bring
+  their own AI Application to interact with their own data through the Strava
+  MCP."
+- **5.5:** "You may not store Strava Data ... in any Persistent Index", which
+  the section defines to include "vector stores, embedding stores, search
+  indexes, knowledge graphs, retrieval-augmented data stores, archives".
+
+**Decision:** rocket does not upload to Strava. The crop-and-ship pipeline ends
+at the preview screen: rocket crops, inspects, and shows Luis what changed;
+Luis uploads by hand, as he does today. `POST /api/ship` is not built.
+
+**Why the obvious defence fails.** The intuitive argument is that a FIT file
+Luis recorded on his own Garmin contains no Strava Data, so 5.3 cannot reach it.
+It cannot reach it _via Strava Data_ -- but 5.3's restricted noun is "the Strava
+API Materials **or** Strava Data", and the API Agreement defines Strava API
+Materials as "the Strava application programming interface, software developer
+kit, documentation, and any software, materials or data that Strava makes
+available to you ... including the API Token". Uploading needs a registered
+Developer Application (Agreement 1.1) and its API Token. Using that token to
+operate rocket is using Strava API Materials in connection with the operation of
+an AI Application, whatever is in the file. Agreement 7.1 does permit developer
+applications to "include the option to upload activities" -- but 7.1 grants the
+capability, and Policy 5.3 removes the class of application allowed to use it.
+
+**Is rocket an AI Application?** The term is used and **never defined** -- not in
+the Policy, and not in the Agreement the Policy defers its capitalised terms to.
+That is a real gap in Strava's drafting, and the verdict deliberately does not
+rest on it. It rests on 5.3's enumerated activities: `docs/specs/04-mcp-surface.md`
+states that tool responses are shaped for "an LLM mid-conversation", so every
+result is ingested into a context window, which is named verbatim. Rocket is an
+AI Application on any reading, and the 2026-09-07 entry already concluded so.
+
+**And the MCP path has no upload.** The sanctioned interface is the one already
+attached to this account. Its tool surface, observed live (`eligibility` returns
+`{"eligible":true}`), is eleven tools: `eligibility`, `health`,
+`get_athlete_profile`, `get_athlete_zones`, `get_gear`, `get_club_info`,
+`list_activities`, `get_activity_performance`, `get_activity_streams`,
+`get_strength_workout_details`, `get_training_plan`. Every one is a read. There
+is no upload, no create, no write of any kind. So both doors are shut, for
+different reasons: the API is permitted to upload but forbidden to us, and the
+MCP is permitted to us but cannot upload.
+
+**Alternatives rejected:** (a) Building the upload behind a feature flag pending
+clarification from Strava -- 5.3 is unambiguous about the mechanism even where
+the term is undefined, and a flag leaves `src/lib/strava.ts` in the tree as
+something a hurried agent switches on. (b) Emailing Strava for a personal-use
+exemption; 3.5 already states what the personal-use route is, and it is the MCP.
+(c) Recording this as prose only. Rejected by `docs/ci-gates.md`'s own rule: the
+upload is four lines of `fetch`, it makes a real feature work, and nothing in
+the tree resists it. Hence `scripts/check_no_strava_api.py`.
+
+**Consequences:** `tasks/preview-and-ship.md` loses its third act and keeps the
+first two, which are the valuable ones -- the crop and the forensic report are
+where the work is; the upload was always one tap. `src/db/ingest-schema.ts`'s
+`uploading` / `uploaded` states and `strava_activity_id` are now aspirational;
+that contract belongs to the ingest and preview tasks and is left for them to
+settle rather than edited from here. Separately flagged, not acted on: 5.5 binds
+the MCP path too, because 3.5 permits subscriber access "in accordance with this
+Policy". Persisting activities read through the Strava MCP into Neon would put
+Strava Data in a retrieval store. Nothing does that today -- Garmin is the ingest
+source and no code reads Strava -- but the ingest contract should state it before
+anything does.
+
+**Status:** ACTIVE

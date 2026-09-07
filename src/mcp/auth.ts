@@ -5,11 +5,26 @@ import { createHash, timingSafeEqual } from 'node:crypto';
  * up in the training history, which is append-only and therefore unrepairable.
  * Its only gate is one shared secret.
  *
- * Accepted either as `Authorization: Bearer <token>` (Claude Code, the API
- * connector, scripts) or as `?token=` (the claude.ai custom-connector UI has no
- * header field, so the secret rides in the URL there). Use a URL-safe token:
- * a base64 secret containing `+`, `/` or `=` breaks on paste, because `+`
- * decodes to a space in a query string.
+ * Accepted either as `Authorization: Bearer <token>` or as `?token=`. Use a
+ * URL-safe token: a base64 secret containing `+`, `/` or `=` breaks on paste,
+ * because `+` decodes to a space in a query string.
+ *
+ * CORRECTED 2026-09-07: this comment used to say the claude.ai connector UI
+ * "has no header field". It does -- the Add-custom-connector dialog has a
+ * `Request headers` section -- but it is beta and, in Anthropic's words,
+ * "available to a limited set of organizations", so it may be absent from any
+ * given account. Reaching it also needs the dialog's URL probe to succeed
+ * first, and an unauthenticated probe of this route returns the bare 401
+ * below. `?token=` is therefore the path that works on every account, and the
+ * header is the upgrade. Both are accepted here; neither needs new code.
+ * See docs/decisions.md, "the connector needs no OAuth server".
+ *
+ * ponytail: a credential in a URL is a real weakness -- Anthropic advises
+ * against it and the MCP authorization spec forbids access tokens in the query
+ * string. Accepted for one private single-user endpoint behind a 256-bit
+ * token. Upgrade to the `Request headers` field the moment it appears in the
+ * dialog; rotating means changing MCP_BEARER_TOKEN and re-adding the connector,
+ * since auth settings cannot be edited after a connector is added.
  *
  * FAIL-CLOSED: with `MCP_BEARER_TOKEN` unset nothing authenticates and the
  * surface is dormant, rather than open. No OAuth is advertised -- an

@@ -50,6 +50,16 @@ jobs:
       # A broken guard looks exactly like a clean repo.
       - run: python3 scripts/test_guards.py
 
+  # Rocket reads Strava through the official MCP connector and by no other
+  # route, and may not upload to it at all (API Policy 2026, 5.3 and 3.5).
+  # A prose constraint would not survive contact: the upload is four lines of
+  # fetch and it makes a real feature work.
+  no-strava-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: python3 scripts/check_no_strava_api.py
+
   # -------------------------------------------------------------------------
   # Stack gates.
   # -------------------------------------------------------------------------
@@ -155,7 +165,8 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: astral-sh/setup-uv@f94ec6bedd8674c4426838e6b50417d36b6ab231 # v5.3.1
-      # The Garmin and Strava harnesses hold the two silent-failure paths in the
-      # project: an MFA code that never reaches the library, and a Strava grant
-      # missing activity:read_all. Both fail invisibly in production.
+      # The Garmin harness holds the project's silent-failure path: an MFA code
+      # that never reaches the library, which fails invisibly in production.
+      # The Strava half of this comment described a harness withdrawn on
+      # 2026-09-07; only Garmin runs here.
       - run: uv run --directory tools/garmin_probe pytest -q
