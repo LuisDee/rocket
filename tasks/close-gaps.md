@@ -85,4 +85,4 @@ one, so `raceDistanceOn()` filters on it rather than on `LIVE_RACE_DATES`.
 
 ## Commits
 
-(populated as work lands)
+- `bb088cb` fix: close the gaps the independent verification found
