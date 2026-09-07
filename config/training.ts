@@ -252,7 +252,25 @@ export const GUARDRAIL_RULE_IDS = {
     'racesCountAsQualitySessions',
   ],
   'protected-taper': ['protectedTaperWeeks'],
-} as const satisfies Record<string, readonly (keyof typeof GUARDRAILS)[]>;
+
+  /**
+   * The injury gate. docs/specs/03-planner.md:24 makes "no quality session
+   * while soreness is at or beyond moderate" a hard guardrail, but its
+   * threshold has always lived in READINESS rather than GUARDRAILS -- so a
+   * tumble-dryer refusal had a rule to enforce and no id to cite, which is
+   * exactly the emission gap the ids exist to close (review S6.9).
+   *
+   * The id is added over the field where it already sits rather than moving the
+   * field into GUARDRAILS: the constant is read elsewhere, and relocating a
+   * threshold to tidy a registry is how a value silently changes meaning.
+   * (Added 2026-09-07 by the planner task, which needed to name this rule in
+   * `violated_rules[]` and found it nameless.)
+   */
+  'soreness-quality-gate': ['sorenessBlocksQuality'],
+} as const satisfies Record<
+  string,
+  readonly (keyof typeof GUARDRAILS | keyof typeof READINESS)[]
+>;
 
 /**
  * The ramp cap actually in force. Everything that checks a ramp reads this
@@ -395,6 +413,12 @@ function shiftIsoDate(iso: string, days: number): string {
  * Slots themselves are the planner's job against AvailabilityRule data; this
  * records only the facts the block depends on.
  */
+/**
+ * Named once and used twice: the free-evening count and the weekly cap on the
+ * evening slot are the same fact, and two copies of a fact drift.
+ */
+const FREE_EVENINGS_PER_WEEK = 6;
+
 export const AVAILABILITY = {
   /** One session, roughly two hours. Not five evenings. */
   swimSessionsPerWeek: 1,
@@ -422,7 +446,56 @@ export const AVAILABILITY = {
   swimSlotEndLocal: '22:00',
 
   /** Evenings not taken by swimming, and therefore available for running. */
-  freeEveningsPerWeek: 6,
+  freeEveningsPerWeek: FREE_EVENINGS_PER_WEEK,
+
+  /**
+   * The slots a run can occupy, as DATA. The planner reads this list and knows
+   * nothing else about the shape of a day -- deleting a slot here changes the
+   * plan and changes no code, which is Luis's design instruction ("fully
+   * data-driven, no slot shape baked in", PLAN-2026-001 Stage 6).
+   *
+   * `weekdays` is ISO: 1 = Monday through 7 = Sunday.
+   *
+   * `maxUsesPerWeek` is how the swim is modelled WITHOUT guessing its weekday,
+   * which is recorded nowhere (see swimSlotStartLocal above, which says so).
+   * Six of the seven evenings may carry a run; the seventh is the swim,
+   * wherever it falls. Capacity, not a named day -- the only reading that uses
+   * the numbers actually recorded.
+   *
+   * PROVISIONAL, all three ceilings, and they are new numbers rather than
+   * derived ones: no session length is recorded anywhere in the specs. They
+   * exist because without a ceiling a shortfall can never fire -- any weekly
+   * total fits into one unbounded slot, and "reports a shortfall rather than
+   * silently generating an unrunnable week" becomes untestable. What settles
+   * them: a fortnight of real start and end times from Garmin, which is
+   * already stored (`activities.start_time_local`, `duration_s`).
+   */
+  runSlots: [
+    {
+      id: 'weekday-morning',
+      weekdays: [1, 2, 3, 4, 5],
+      /** ~70 minutes before work at easy pace. The tightest slot in the week. */
+      maxKm: 12,
+      maxUsesPerWeek: null,
+    },
+    {
+      id: 'evening',
+      weekdays: [1, 2, 3, 4, 5, 6, 7],
+      maxKm: 14,
+      maxUsesPerWeek: FREE_EVENINGS_PER_WEEK,
+    },
+    {
+      id: 'weekend-daytime',
+      weekdays: [6, 7],
+      /**
+       * Long runs and races live here. Above marathon distance on purpose: a
+       * ceiling of 42 refuses the 42.195 km the whole block exists to reach,
+       * which is the same failure the spike guardrail documents at length.
+       */
+      maxKm: 45,
+      maxUsesPerWeek: null,
+    },
+  ],
 
   /** No cycling. Not modelled for availability or load. */
   cycles: false,

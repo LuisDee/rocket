@@ -492,7 +492,26 @@ describe('guardrail rule ids', () => {
     // need stable ids, and a guardrail nobody gave one to is a rule the planner
     // can enforce but cannot cite.
     const claimed = Object.values(GUARDRAIL_RULE_IDS).flat();
-    expect([...claimed].sort()).toEqual(Object.keys(GUARDRAILS).sort());
+    const guardrailFields = Object.keys(GUARDRAILS);
+    const claimedGuardrails = claimed.filter((field) =>
+      (guardrailFields as string[]).includes(field),
+    );
+
+    expect([...claimedGuardrails].sort()).toEqual([...guardrailFields].sort());
+  });
+
+  it('claims the soreness gate from READINESS, and nothing else from outside GUARDRAILS', () => {
+    // The one id whose threshold does not live in GUARDRAILS. Asserted by name
+    // rather than allowed as a general escape hatch: the registry widened to
+    // READINESS on 2026-09-07 so the injury gate could be cited in
+    // violated_rules[], and a wider door than that is how a threshold ends up
+    // claimed from a third object nobody is auditing.
+    const claimed = Object.values(GUARDRAIL_RULE_IDS).flat();
+    const guardrailFields = Object.keys(GUARDRAILS) as string[];
+    const foreign = claimed.filter((field) => !guardrailFields.includes(field));
+
+    expect(foreign).toEqual(['sorenessBlocksQuality']);
+    expect(READINESS.sorenessBlocksQuality).toBeGreaterThan(0);
   });
 });
 

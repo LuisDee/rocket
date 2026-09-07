@@ -940,3 +940,108 @@ it is now the single change that would make the guard symmetric for the
 application, and `.env.example` carries the one-liner.
 
 **Status:** ACTIVE
+
+## 2026-09-07 -- availability becomes slot data, and the swim is modelled as capacity rather than a weekday
+
+**Context:** the planner had to place sessions into availability, and
+`AVAILABILITY` recorded facts about the week (one swim of two hours, six free
+evenings, no cycling) but nothing a placer could read: no slot, no ceiling, no
+weekday. Two gaps had to be closed before a single session could land. First,
+the swim's weekday is recorded nowhere and the config says so explicitly and
+deliberately. Second, no session length exists anywhere in the specs, and
+without a ceiling on a slot the plan's own Stage 6 test -- "reports a shortfall
+rather than silently generating an unrunnable week" -- can never fail: any
+weekly total fits into one unbounded slot.
+
+**Decision:** `AVAILABILITY.runSlots` holds three slots as data --
+`weekday-morning` (Mon-Fri, 12 km), `evening` (all seven days, 14 km, capped at
+six uses a week) and `weekend-daytime` (Sat-Sun, 45 km). The planner reads the
+list and knows nothing else about the shape of a day; no slot id appears in
+`src/domain/planner/`. The swim is the evening slot's `maxUsesPerWeek`: six of
+the seven evenings may carry a run and the seventh is the swim, wherever it
+falls. Capacity, not a named day.
+
+The weekend ceiling is above marathon distance on purpose. At 42 it refuses the
+42.195 km the block exists to reach -- the same failure the single-session spike
+guardrail already documents at length.
+
+**Alternatives rejected:** guessing the swim weekday, which would have put a
+fabricated fact in the one file the whole system reads thresholds from. A
+recurring `availability_rules` table, already struck on 2026-09-07 in favour of
+dated notes. Slot ceilings expressed in minutes, which needs a pace to become a
+distance and so imports `PACE_ESTIMATES` -- provisional until the 12 September
+half -- into placement.
+
+**Consequences:** deleting a slot from the config changes the plan and changes
+no code, which is the design instruction. A lost morning is now expressible as
+data (`unavailable`), which is what makes "missed weekday morning" a first-class
+replan trigger rather than an exception. The `maxUsesPerWeek` cap is consumed in
+date order, so a late-week day can find it spent; that surfaces as a shortfall
+rather than an over-booked week, and the upgrade path is noted in the code.
+
+**Status:** PROVISIONAL pending a fortnight of real session start and end times
+from `activities.start_time_local` / `duration_s`, which is the measurement that
+settles all three ceilings. The swim weekday remains unrecorded; asking Luis
+once would replace the capacity model with the real thing.
+
+## 2026-09-07 -- the injury gate gets a rule id where its threshold already lives
+
+**Context:** `docs/specs/03-planner.md:24` makes "no quality session while
+soreness is at or beyond moderate" a hard guardrail, and the write contract
+requires every refusal to cite stable rule ids in `violated_rules[]`. But
+`GUARDRAIL_RULE_IDS` mapped `GUARDRAILS` fields only, and the threshold lives in
+`READINESS.sorenessBlocksQuality`. The tumble-dryer refusal -- Loop B, one of
+the two acceptance loops for the whole product -- had a rule to enforce and no
+id to name it by.
+
+**Decision:** add `'soreness-quality-gate': ['sorenessBlocksQuality']` to the
+registry and widen its `satisfies` clause to `keyof GUARDRAILS | keyof
+READINESS`. The threshold stays where it is. `config/training.test.ts` asserts
+every `GUARDRAILS` field is still claimed exactly once AND that
+`sorenessBlocksQuality` is the only claim from outside `GUARDRAILS`, so the
+widened door does not become a general escape hatch.
+
+**Alternatives rejected:** moving `sorenessBlocksQuality` into `GUARDRAILS`,
+which is tidier and riskier -- relocating a constant other work already reads is
+how a value silently changes meaning, and the readiness score reads this one.
+Emitting a sentence instead of an id, rejected by the contract itself: ids
+survive rewording and are matchable in an eval, prose is not.
+
+**Consequences:** the gate is citable, and it is one of the two rules an athlete
+override cannot reach (`overridable: false`, with the protected taper). It gates
+quality only, never a race: a race is a fixture entered months ago and the
+athlete's call, exactly as `singleSessionSpikes()` already exempts a pure race.
+
+**Status:** ACTIVE
+
+## 2026-09-07 -- a replan reacts to a fact and always lands; a proposal can be refused
+
+**Context:** both `propose()` and `replan()` return the same five-field
+envelope, and `applied` means something different in each. A proposal is the
+athlete asking for something and a guardrail may refuse it. A replan is the
+system reacting to something that already happened -- a run was logged, a body
+hurts, a race was entered, a slot vanished. The first implementation treated
+them identically and refused to update the window when the repair still left a
+breach, which meant a race entered last night could leave the stored plan
+disagreeing with the world.
+
+**Decision:** `propose()` may return `applied: false`, leaves the window
+untouched when it does, and carries a `compliant_alternative` whenever a
+compliant version of the request exists. `replan()` always lands: the repair is
+applied, `applied` is true, and anything still breached comes back in
+`violated_rules` and is spelled out at the end of the rationale.
+
+**Alternatives rejected:** refusing a replan whose repair leaves a breach. A
+plan carrying a named breach is strictly better than a plan that quietly
+disagrees with reality -- the breach is visible, costed and negotiable, and the
+disagreement is neither.
+
+**Consequences:** a tool wiring `rocket_adjust_session` uses `propose()` and
+gets refusals; `rocket_replan`, `rocket_log_activity` and `rocket_daily_checkin`
+use `replan()` and get a diff. `applied: false` therefore keeps its single
+meaning across the surface -- "your request was refused" -- which is the whole
+reason the boolean exists.
+
+**Status:** ACTIVE
+
+---
