@@ -147,4 +147,4 @@ row moves off `NOT IMPLEMENTED`, plus new rows); `docs/decisions.md` (appended);
 
 ## Commits
 
-(populated as work lands)
+- `44c7265 feat(sync): the daily pass, the plan on the wrist, and the G1 probe`
