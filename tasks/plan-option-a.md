@@ -72,20 +72,23 @@ asserted as proven.
 
 ## Checklist
 
-- [ ] F22: correct the SDK/`mcp-handler` facts at the discovered-facts table, the
+- [x] F22: correct the SDK/`mcp-handler` facts at the discovered-facts table, the
       dependency table and the data-flow diagram; delete the Stage 0 SDK spike and
       zod-3 probe; pin Stage 4 to the DoHardThings stack
-- [ ] F23: move Stage 5 behind Stage 7, retitle it as deferred, fix the pre-mortem
+- [x] F23: move Stage 5 behind Stage 7, retitle it as deferred, fix the pre-mortem
       ordering sentence
-- [ ] F30/F2/F31: strike Stage 3's second store and contract suite; Deferred-Items
+- [x] F30/F2/F31: strike Stage 3's second store and contract suite; Deferred-Items
       Register; per-stage budget and cut-line; MVP restated against (a)-(e)
-- [ ] F25: re-ranked lift table
-- [ ] F29/S6.8: two race fixtures on Stage 7
-- [ ] F32: the dated 2026-09-14 gate
-- [ ] F21: Stage 3b wellness-coverage line
-- [ ] F14: withdraw open question 4's recommendation
-- [ ] Gates green, commit, record the SHA below
+- [x] F25: re-ranked lift table
+- [x] F29/S6.8: two race fixtures on Stage 7
+- [x] F32: the dated 2026-09-14 gate
+- [x] F21: Stage 3b wellness-coverage line
+- [x] F14: withdraw open question 4's recommendation
+- [x] Gates green, commit, record the SHA below
 
 ## Commits
 
-(populated as work lands)
+- `54f55a5` — docs: rewrite PLAN-2026-001 for option A and correct the MCP
+  stack facts. All nine checklist items; seven gates green before commit
+  (`typecheck`, `lint`, `format:check`, `test`, `check_gate_ledger.py`,
+  `test_guards.py` 12/12, `check_task_trace.py --range main..HEAD`).
