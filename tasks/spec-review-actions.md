@@ -83,4 +83,4 @@ library ever becomes primary the endpoint changes and the section says so.
 
 ## Commits
 
-(populated as work lands)
+- `4d456bb` docs(specs): write-tool contract, rocket_ prefix, and the goal as a range
