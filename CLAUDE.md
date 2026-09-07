@@ -1,6 +1,6 @@
 # rocket — adaptive marathon training planner
 
-Personal training-planning system for Luis. Goal race: **Battersea Park Marathon, 24 Oct 2026** ("as fast as possible"). MCP-first: the primary interface is conversation with Claude, which reads/writes plan state through MCP tools. A thin PWA (saved to iOS home screen) renders the calendar and daily check-in. Architecture is deliberately simple: one web server, one datastore, MCP endpoint, PWA frontend. Do not gold-plate infrastructure.
+Personal training-planning system for Luis. Goal race: **Battersea Park Marathon, 24 Oct 2026**. The goal is a time _range_, held in `config/training.ts` `PACE_ESTIMATES.planningBandSeconds` and settled by the Battersea Park Half of 12 Sep 2026 -- not a single target, and not "as fast as possible", which was retired as a planning input on 2026-09-07. MCP-first: the primary interface is conversation with Claude, which reads/writes plan state through MCP tools. A thin PWA (saved to iOS home screen) renders the calendar and daily check-in. Architecture is deliberately simple: one web server, one datastore, MCP endpoint, PWA frontend. Do not gold-plate infrastructure.
 
 ## Read these before writing any code
 

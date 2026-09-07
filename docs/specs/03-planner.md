@@ -15,7 +15,7 @@
 1. Daily check-in red/amber readiness.
 2. Ad-hoc activity logged that deviates >20% from plan (the spanner).
 3. Availability change.
-4. User asks via MCP (`replan` with free-text reason).
+4. User asks via MCP (`rocket_replan` with free-text reason).
 5. Weekly rollover.
 
 Replans edit the rolling window only, keep weekly load target if achievable, otherwise adjust and log the debt/surplus against the macro layer. **Every replan returns a diff + plain-language rationale.**

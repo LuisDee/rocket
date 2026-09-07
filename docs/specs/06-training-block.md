@@ -1,8 +1,12 @@
 # 06 — The Battersea block (seed data / business fixture)
 
-Goal: Battersea Park Marathon, 2026-10-24, as fast as possible.
+Goal: Battersea Park Marathon, 2026-10-24. The goal time is a **range**, not a
+target, and the live value is `config/training.ts` `PACE_ESTIMATES.planningBandSeconds`
+-- derived from a rehearsal result rather than chosen in advance. "As fast as
+possible" was retired as a planning input on 2026-09-07: it is not something a
+planner can place sessions against.
 
-> **SUPERSEDED 2026-09-06 as to dates and volumes.** The block below was
+> **SUPERSEDED 2026-09-06 as to dates, volumes and the athlete baseline.** The block below was
 > authored against a 2026-08-10 start and a training history that did not
 > happen -- a holiday interrupted weeks commencing 24 and 31 Aug. The live
 > macro layer is `config/training.ts` `BLOCK_WEEKS`, re-derived from measured
@@ -11,15 +15,16 @@ Goal: Battersea Park Marathon, 2026-10-24, as fast as possible.
 > holds -- phases, guardrails, shoe policy, and deriving marathon pace from a
 > rehearsal result rather than guessing it. See docs/decisions.md 2026-09-06.
 >
-> **Further superseded 2026-09-07 as to races.** Dorney is dropped; Lincoln and
-> LDNX stand and now carry their weeks' long sessions rather than competing with
-> them. The goal band below (~3:25-3:35) is retired: goal pace is derived from
-> the 12 Sep half result as a range, not chosen in advance. Live race data is
-> `config/training.ts` `RACES`.
+> **Further superseded 2026-09-07 as to races and the goal.** Dorney is dropped;
+> Lincoln and LDNX stand and now carry their weeks' long sessions rather than
+> competing with them. The goal band below (~3:25-3:35) is retired: the band is
+> `PACE_ESTIMATES.planningBandSeconds` and it settles on the **Battersea Park
+> Half of 2026-09-12**, not on Lincoln. Live race data is `config/training.ts`
+> `RACES`.
 
 ## Athlete baseline (2026-08-10)
 - Recent weekly volume ~30km (relaxed, out of a previous block). Longest recent: 33km trail/600m on 2026-08-09 → severe DOMS (eccentric downhill load + new Peregrines + uneven surface; three novel stressors). Prior week: 30km road @5:00/km in carbons, felt easy.
-- Implied goal band ~3:25–3:35; **provisional until Lincoln Half (rehearsal) confirms**. Planner derives MP from Lincoln, not from guesses.
+- Goal band: `config/training.ts` `PACE_ESTIMATES.planningBandSeconds`. The settling event is the **Battersea Park Half on 2026-09-12**, not Lincoln -- Lincoln's role has changed twice and it is now a marathon-pace rehearsal, while the September half took the pace-setting job. Re-derive the band from that result with the 2.11-2.15 recreational half-to-marathon multiplier rather than the Garmin-implied 1.135 Riegel exponent, and record it as a decision. The planner reads the band; it never reads a number written here.
 - Rarely injured historically. Swim: learning front crawl, one 2-hour session per week. No cycling.
 
 ## Phase plan (macro layer seed)

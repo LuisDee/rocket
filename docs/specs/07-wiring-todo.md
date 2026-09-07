@@ -1,7 +1,7 @@
 # 07 — Wiring todo (external dependencies, in order)
 
 ## Build order (each milestone independently useful)
-1. **M1 — Core loop, zero integrations.** Domain model + load engine + planner + MCP tools, manual `log_activity` and `daily_checkin` only. Seed with 06-training-block. *This is already a usable coach.*
+1. **M1 — Core loop, zero integrations.** Domain model + load engine + planner + MCP tools, manual `rocket_log_activity` and `rocket_daily_checkin` only. Seed with 06-training-block. *This is already a usable coach.*
 2. **M2 — PWA.** Calendar view + 30-second check-in + one-tap context tags. iOS home-screen install.
 3. **M3 — Garmin sync.** Source decided by probe. If the bridge carries the
    wellness fields this is roughly a day: webhook plus reconcile-on-read plus the
@@ -10,7 +10,7 @@
    Wellness data upgrades readiness scoring. **The historical backfill does not
    wait for this** — it is decoupled and lands in M1.
 4. **M4 — DoHardThings sync.** Races auto-import; roles assigned locally.
-5. **M5 — routr.** `propose_route` wired to routr MCP.
+5. **M5 — routr.** `rocket_propose_route` wired to routr MCP.
 6. **M6 — Calibration.** Prediction-vs-outcome tuning of stress multipliers from accumulated data.
 
 ## External tasks on Luis (not code)

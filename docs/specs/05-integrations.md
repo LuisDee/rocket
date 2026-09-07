@@ -39,8 +39,27 @@ metric is gated on the watch being **worn asleep**, not on the model.
   closed, alert, wait. Any interactive MFA bootstrap happens on the laptop.
 - Tokens live in Postgres, not on disk -- there is no durable volume in this
   architecture.
-- Staleness is a visible flag in `get_status`, and the system runs fully on
+- Staleness is a visible flag in `rocket_get_status`, and the system runs fully on
   manual logs + check-ins during outages (invariant #2).
+
+## The daily pass (the only scheduled job)
+
+One cron, once a day, four steps in order, then the outbound write below.
+
+1. **Ingest** — pull yesterday's activities and wellness from the bridge. Store the raw payload losslessly alongside the mapped rows.
+2. **Recompute** — score stress for anything new, then ATL/CTL/TSB and the trailing-14-day trend, by code over the full series with the coverage window stated. Never by reading a list.
+3. **Evaluate replan triggers** — the five in `03-planner.md`. A trigger that fires runs the deterministic planner over the rolling window; nothing else writes sessions.
+4. **Write a coach note** — one dated line saying what the pass found and what it changed, stored as a note rather than sent anywhere. It is waiting in `rocket_get_status` when the next conversation opens. Web push stays deferred (decision of 2026-09-06): that deferral covers the delivery channel, not this computation, which earns its keep with no push at all.
+
+**Failure is loud, because the interesting failure is silence.** The cron runs at most once a day, within about an hour of its slot, is never retried, and a missed run leaves no log — so the alert cannot be raised by the job. A dead-man's switch (healthchecks.io) is pinged only at the end of a successful pass, and the absence of that ping is the alarm. A pass that runs and fails still writes its coach note saying so, and staleness stays a visible flag in `rocket_get_status` (invariant #2).
+
+## Outbound: the plan on the wrist
+
+One direction, one call, no compiler. The last step of the daily pass writes today's planned session to intervals.icu as an **event** (`POST /api/v1/athlete/{id}/events`), on the same personal API key the ingest leg already holds; intervals.icu syncs it to Garmin Connect, which surfaces it on the Fenix 8. The prescription travels as words in the name and description — "Easy 12 km, conversational, road trainer" — not as compiled steps.
+
+It exists because a plan that adapts daily and a watch that still shows yesterday's session make the adaptation decorative: at 06:00 the athlete follows the watch. One POST on a job that has to exist anyway closes that, so it is a step of the daily pass rather than its own milestone, its own stage or an MCP tool.
+
+Out of scope until after 2026-10-24: structured workout steps, pace or HR targets compiled into a workout file, Garmin-direct workout upload via `python-garminconnect`, and any notion of the watch writing back. This block is easy volume with one quality session and one long run a week, which a Fenix 8 user runs to pace or to feel; a compiled workout buys nothing and costs a compiler. If the direct library ever becomes primary, the endpoint changes and this section changes with it.
 
 ## DoHardThings (already available via MCP)
 Race source of truth. Sync races in range; map to Race entities; assign roles in our store (roles are our concept, not theirs). Attendance ("going") marks which races are mine.
@@ -49,7 +68,7 @@ Race source of truth. Sync races in range; map to Race entities; assign roles in
 Downstream of session prescription: planner emits distance + terrain profile + intensity + start point; routr returns a Strava route. Wire after core loop works.
 
 ## Work calendar
-v1: AvailabilityRule pattern (Mon–Fri 09:00–18:00/19:00, 45-min commute each way) + manual overrides via `set_availability`. ICS feed integration is a later nice-to-have; don't block on it.
+v1: AvailabilityRule pattern (Mon–Fri 09:00–18:00/19:00, 45-min commute each way) + manual overrides via `rocket_set_availability`. ICS feed integration is a later nice-to-have; don't block on it.
 
 ## Strava (optional, deferred)
 Garmin covers activities + wellness. Strava adds only routr publishing and social. Wire only when routr needs it.
