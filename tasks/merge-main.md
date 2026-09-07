@@ -35,13 +35,15 @@ the authority".
 
 ## Checklist
 
-- [ ] `git merge main`, expect conflicts in the two spec files only
-- [ ] Resolve `03-planner.md`: main's line 11 wholesale, six-evenings fact preserved
-- [ ] Resolve `01-domain-model.md`: branch structure, Dorney line deleted
-- [ ] Verify LICENSE, README, vitest `.worktrees/**` exclusion recovered
-- [ ] case-insensitive grep for the scrubbed place name silent, ledger quote included
-- [ ] All gates green, then commit
+- [x] `git merge main`, expect conflicts in the two spec files only
+- [x] Resolve `03-planner.md`: main's line 11 wholesale, six-evenings fact preserved
+- [x] Resolve `01-domain-model.md`: branch structure, Dorney line deleted
+- [x] Verify LICENSE, README, vitest `.worktrees/**` exclusion recovered -- the last
+      proved, not assumed: a failing test placed under `.worktrees/` was not collected
+- [x] case-insensitive grep for the scrubbed place name silent, ledger quote included --
+      it survived in the ledger's F33 quotation and was redacted there
+- [x] All gates green, then commit
 
 ## Commits
 
-(populated as work lands)
+ff1c851 merge: main into feat/m1-core-loop, resolving the two spec conflicts by hand
