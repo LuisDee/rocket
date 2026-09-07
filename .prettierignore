@@ -6,3 +6,6 @@ docs/specs
 
 # python harnesses (uv-managed; formatted by ruff conventions, not prettier)
 tools/
+
+# drizzle-kit generates these; formatting them fights the tool on every migration
+src/db/migrations/meta

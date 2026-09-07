@@ -15,15 +15,20 @@
     "guards": "python3 scripts/check_gate_ledger.py && python3 scripts/test_guards.py"
   },
   "dependencies": {
+    "@vercel/functions": "3.9.5",
+    "drizzle-orm": "0.45.2",
     "next": "16.3.1",
+    "pg": "8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "8.15.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "prettier": "^3.9.6",
