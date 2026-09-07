@@ -41,6 +41,10 @@ const eslintConfig = defineConfig([
 
   globalIgnores([
     '.next/**',
+    // The viewport sweep's own build output; see next.config.ts.
+    '.next-e2e/**',
+    'test-results/**',
+    'playwright-report/**',
     'out/**',
     'build/**',
     'next-env.d.ts',

@@ -152,6 +152,58 @@ jobs:
       # DATABASE_URL, so a misconfigured job is red rather than green-and-empty.
       - run: npm run test:integration
 
+  # Renders every route in a real browser at phone width and measures four
+  # things the gates above are blind to: horizontal overflow, text the same
+  # colour as what is behind it, tap targets under 44px, and console errors.
+  # typecheck, lint, format and the vitest suite never render a page, and three
+  # defects have shipped through all of them.
+  #
+  # A production build, on its own port and its own distDir, never a dev server:
+  # the sweep has to measure what actually ships, and `next dev` streams HMR
+  # websocket failures into the console check.
+  #
+  # Same digest-pinned Postgres as `integration`, and the same reason. It also
+  # plants one ingest row per interesting status, because `/activities` lists
+  # only the pending queue -- the shipped approval screen is reachable by direct
+  # URL alone and would otherwise never be measured.
+  viewport:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280 # postgres:18
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: rocket
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres@localhost:5432/rocket
+      DATABASE_URL_UNPOOLED: postgres://postgres@localhost:5432/rocket
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      # Refuses to run against a non-local host, so it cannot touch Neon.
+      - run: node e2e/fixtures.mts
+      - run: npm run test:viewport
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: viewport-traces
+          path: test-results/
+          retention-days: 7
+
   secrets-scan:
     runs-on: ubuntu-latest
     steps:

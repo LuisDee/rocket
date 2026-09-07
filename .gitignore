@@ -59,3 +59,8 @@ tools/**/out/
 # Activity files are GPS traces of real runs. Never commit one.
 *.fit
 *.FIT
+
+# Viewport sweep: its own build output and Playwright artefacts
+.next-e2e/
+test-results/
+playwright-report/

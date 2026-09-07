@@ -98,7 +98,7 @@ export default async function CheckInPage({
           label="Soreness"
           hint={`Tap only what hurts. ${READINESS.sorenessBlocksQuality} or more gates quality work.`}
         >
-          <div className="space-y-2">
+          <div className="space-y-3">
             {SORENESS_LOCATIONS.map((location) => (
               <SorenessRow key={location} location={location} />
             ))}
@@ -191,7 +191,12 @@ function Pills({
             value={value}
             className="peer sr-only"
           />
-          <span className="block rounded-lg bg-zinc-900 py-3 text-center font-mono text-base tabular-nums text-zinc-400 ring-1 ring-zinc-800 peer-checked:bg-sky-500/20 peer-checked:text-sky-200 peer-checked:ring-sky-500/60 peer-focus-visible:ring-2 peer-focus-visible:ring-sky-400">
+          {/*
+            min-h-[44px] rather than padding: this is tapped one-handed, half
+            awake, and `py-3` measured 36px. Stating the floor keeps it 44 even
+            if the font size changes underneath it.
+          */}
+          <span className="flex min-h-[44px] items-center justify-center rounded-lg bg-zinc-900 text-center font-mono text-base tabular-nums text-zinc-400 ring-1 ring-zinc-800 peer-checked:bg-sky-500/20 peer-checked:text-sky-200 peer-checked:ring-sky-500/60 peer-focus-visible:ring-2 peer-focus-visible:ring-sky-400">
             {value}
           </span>
         </label>
@@ -202,11 +207,16 @@ function Pills({
 
 function SorenessRow({ location }: { location: SorenessLocation }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="w-20 shrink-0 text-sm capitalize text-zinc-300">
-        {location}
-      </span>
-      <div className="grid flex-1 grid-cols-6 gap-1">
+    <div>
+      <span className="text-sm capitalize text-zinc-300">{location}</span>
+      {/*
+        The label used to sit beside the pills at `w-20`, which left six pills
+        sharing 270px -- 42px each at 390px wide, 39px at 375px. Under the 44px
+        minimum by construction, at every phone width, so no amount of padding
+        would have fixed it. Putting the label on its own line gives the row the
+        full width and the pills come out at 53px.
+      */}
+      <div className="mt-1 grid grid-cols-6 gap-1">
         {SEVERITY.map((severity) => (
           <label key={severity} className="block">
             <input
@@ -218,7 +228,7 @@ function SorenessRow({ location }: { location: SorenessLocation }) {
             />
             <span
               className={[
-                'block rounded-md bg-zinc-900 py-2 text-center font-mono text-sm tabular-nums ring-1 ring-zinc-800',
+                'flex min-h-[44px] items-center justify-center rounded-md bg-zinc-900 text-center font-mono text-sm tabular-nums ring-1 ring-zinc-800',
                 severity === 0 ? 'text-zinc-600' : 'text-zinc-400',
                 // Zero is the default and means "fine". Highlighting it in the
                 // warning colour made every untouched row read as a complaint.

@@ -18,7 +18,8 @@
     "probe:g1": "node scripts/probe-g1.mts",
     "test:watch": "vitest",
     "guards": "python3 scripts/check_gate_ledger.py && python3 scripts/test_guards.py && python3 scripts/check_no_strava_api.py",
-    "strava:auth": "node scripts/strava-auth.mts"
+    "strava:auth": "node scripts/strava-auth.mts",
+    "test:viewport": "playwright test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
@@ -32,6 +33,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "8.15.6",
