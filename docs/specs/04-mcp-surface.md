@@ -6,7 +6,7 @@ Every tool name carries the `rocket_` prefix. The names are frozen the moment th
 
 ## Tools (v1)
 
-**rocket_get_status()** → today's readiness (with rationale), today's session(s), load state (ATL/CTL/TSB per component, ramp %), days to next race + goal race, the goal band (a range, never a single time — `PACE_ESTIMATES.planningBandSeconds`, see 06), the trailing-14-day trend (below), any pending flags (e.g. "Garmin sync stale 3 days").
+**rocket_get_status()** → today's readiness (with rationale), today's session(s), load state (ATL/CTL/TSB per component, ramp %), days to next race + goal race, the goal band (a range, never a single time — `PACE_ESTIMATES.planningBandSeconds`, see 06), the trailing-14-day trend (below), any open notes (non-expired rows from `notes`, see `rocket_add_note`), any pending flags (e.g. "Garmin sync stale 3 days").
 
 **rocket_get_week(offset=0)** → the rolling window: sessions with slots, races, availability blocks, weekly target vs projected.
 
@@ -20,6 +20,14 @@ Every tool name carries the `rocket_` prefix. The names are frozen the moment th
 
 **rocket_set_availability(rules|overrides)** → work pattern, commute, the weekly swim slot, one-off exceptions.
 
+**rocket_add_note(date, kind, text, expires_at?)** → records something said in conversation that changes the plan but is not an activity, a check-in or a schedule rule. `kind` is one of `availability` | `wellness` | `constraint` | `free_text`.
+
+This tool exists because Claude's own memory is per-account, synthesised daily and not readable by this server. "I'm in Leeds Thursday", "my calf is tight", "no long run this weekend, wedding" are planning inputs that arrive as sentences and are lost the moment the conversation ends unless something writes them down. Every other write tool takes a structured fact; this one takes the ones that do not fit a column yet.
+
+Notes are **mutable** — a note is a claim about the near future that gets corrected or withdrawn, unlike an activity, which is history. `expires_at` is what keeps `rocket_get_status` short: an availability note for last Thursday should stop surfacing without anyone tidying it. Null means it stands until withdrawn.
+
+The planner reads open notes but is not driven by them: a note is context for the negotiation, not a command that silently moves sessions. A note that should move a session is an argument for `rocket_replan`, and the diff still comes back for approval.
+
 **rocket_get_calendar(from, to)** → merged view: sessions + races + work/commute + markers. Feeds the PWA too.
 
 **rocket_get_load_history(days=42)** → time series for "how's the block going" conversations and charts.
@@ -30,11 +38,12 @@ Every tool name carries the `rocket_` prefix. The names are frozen the moment th
 
 ## The write contract
 
-Six of the eleven mutate state the plan depends on: `rocket_daily_checkin`, `rocket_log_activity`, `rocket_replan`, `rocket_adjust_session`, `rocket_set_availability`, and `rocket_sync_now` — the last because an ingested activity can fire the spanner trigger and move the window. Each returns the same envelope:
+Seven of the twelve mutate state the plan depends on: `rocket_daily_checkin`, `rocket_log_activity`, `rocket_replan`, `rocket_adjust_session`, `rocket_set_availability`, `rocket_add_note`, and `rocket_sync_now` — the last because an ingested activity can fire the spanner trigger and move the window. Each returns the same envelope:
 
 ```
 {
   applied: boolean,
+  applied_rules: rule_id[],
   violated_rules: rule_id[],
   compliant_alternative: Diff | null,
   resulting_window: Session[]
@@ -42,7 +51,8 @@ Six of the eleven mutate state the plan depends on: `rocket_daily_checkin`, `roc
 ```
 
 - **`applied`** is the field that separates "your request was refused" from "your request changed nothing". Those two serialise to an identical diff, and a model asked to narrate an ambiguous result fills the gap with optimism — the failure Strava shipped publicly when Athlete Intelligence congratulated a rider on the ride that ended in his crash. A boolean can be asserted by a test; a paragraph cannot. A rejected write returns `applied: false`, and the transcript that follows must not claim it landed.
-- **`violated_rules`** carries stable string ids from the guardrail set, not sentences. Ids survive rewording and are matchable in an eval; the prose belongs in the summary.
+- **`applied_rules`** carries the stable ids from `GUARDRAIL_RULE_IDS` that were actually evaluated in reaching this decision. This is the half that makes "science-backed" checkable rather than assertable: `violated_rules` alone says what was broken and stays silent about what was consulted, so a planner that skipped the ramp cap entirely and one that checked and passed it return the identical envelope. Emitting what was applied is the only way a test can tell those apart, and the only way a claim that a rule is enforced can be falsified.
+- **`violated_rules`** carries stable string ids from the same set, not sentences. Ids survive rewording and are matchable in an eval; the prose belongs in the summary. Always a subset of `applied_rules` — a rule cannot be violated without having been evaluated.
 - **`compliant_alternative`** is the counter-offer that "tools never dead-end" already requires, in the same diff shape as an applied change — so accepting it is one more call rather than a re-negotiation.
 - **`resulting_window`** is the rolling window as it stands after the call, applied or refused. The caller never has to ask what the plan is now, and a narration can be checked against it.
 

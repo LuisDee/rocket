@@ -60,17 +60,32 @@ accommodates every field Garmin exposes even where the first release ignores it.
 The raw JSON stays in `out/`, gitignored: it is your health data and a live refresh
 token.
 
-## 5. Create a Strava API application (10 min)
+## 5. Strava: nothing to do — withdrawn
 
-See [STRAVA_SETUP.md](STRAVA_SETUP.md) for the click-path. Summary: register the app,
-store the two credentials, approve the consent screen with **every box ticked**, and
-paste the code back.
+**Do not create a Strava API application.** The step that used to live here was
+withdrawn on 2026-09-07: Strava's API Policy section 5.3, effective 2026-06-01,
+prohibits using Strava data "in connection with the development, training,
+evaluation, or operation of any AI Application", and rocket is one. See
+`docs/decisions.md`, "the Strava API is withdrawn".
 
-## 6. Back up your FIT files (1 min)
+Claude still reads Strava through the official Strava MCP connector, which is the
+subscriber carve-out for reading your own data. That path is unaffected and needs
+nothing from you.
 
-`~/dev/routr/artifacts/fit_crop/` holds 18 files and 5.9 MB of your only local training
-history, and it is gitignored — one `git clean` from gone. Copy it to iCloud Drive or
-anywhere that is not that folder.
+Outstanding on you, whenever convenient: revoke the Strava API application at
+strava.com/settings/api and remove the `strava/client-id` and
+`strava/client-secret` entries from `pass`. Nothing breaks if you leave them; they
+are simply credentials with no sanctioned use.
+
+## 6. Back up your FIT files — DONE 2026-09-07
+
+`~/dev/routr/artifacts/fit_crop/` holds 31 files and 5.9 MB of your only local
+training history, and it is gitignored — one `git clean` from gone.
+
+Backed up 2026-09-07 to
+`~/Library/Mobile Documents/com~apple~CloudDocs/fit-history-backup-2026-09-07`
+(32 entries, 6.1 MB). Re-run the copy after any block of new activities; the source
+is still the only working copy inside `~/dev`.
 
 ---
 

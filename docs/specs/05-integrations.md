@@ -25,12 +25,18 @@ metric is gated on the watch being **worn asleep**, not on the model.
 
 **Strategy: pull into our own store; never serve an MCP tool live from Garmin.**
 
-- Two candidate sources, decided by a probe before any schema is designed (see
-  the plan): a **partner bridge** (intervals.icu holds genuine Garmin partner
-  OAuth and exposes a self-serve personal API key), or **`python-garminconnect`
-  direct** on a scheduled runner. The bridge is less fragile; the direct library
-  is the only route to Garmin's own Training Readiness factors and its
-  acute/chronic load pair. Field coverage of the bridge is unverified.
+- **Decided 2026-09-07: the partner bridge is primary.** intervals.icu holds
+  genuine Garmin partner OAuth and issues a self-serve personal API key; it
+  relays the wellness metrics within minutes of a sync and carries the outbound
+  watch push. `python-garminconnect` is retained as a **manual fallback** for
+  deep pulls and backfill — it is the only route to Garmin's own Training
+  Readiness factors and its acute/chronic load pair, but its per-account 429
+  locks the account for 48-72 hours and it cannot run on Vercel. Choosing the
+  bridge removes Python from production entirely. See `docs/decisions.md`
+  2026-09-07.
+- **Still unverified, and gating:** the bridge's wellness field coverage. The G1
+  probe in `07-wiring-todo.md` must run and be recorded before any schema leans
+  on a bridge-supplied field.
 - Store Garmin's own `dailyTrainingLoadAcute` / `dailyTrainingLoadChronic` and
   Training Readiness alongside our computed values. They are a free independent
   oracle; disagreement is the signal calibration needs.
@@ -70,5 +76,15 @@ Downstream of session prescription: planner emits distance + terrain profile + i
 ## Work calendar
 v1: AvailabilityRule pattern (Mon–Fri 09:00–18:00/19:00, 45-min commute each way) + manual overrides via `rocket_set_availability`. ICS feed integration is a later nice-to-have; don't block on it.
 
-## Strava (optional, deferred)
-Garmin covers activities + wellness. Strava adds only routr publishing and social. Wire only when routr needs it.
+## Strava — API withdrawn, MCP only
+**rocket does not use the Strava API.** Strava's API Policy section 5.3, effective
+2026-06-01, prohibits using Strava API materials or data "directly or indirectly, in
+connection with the development, training, evaluation, or operation of any AI
+Application". rocket is one. `tools/strava_probe/` and `docs/STRAVA_SETUP.md` were
+deleted on 2026-09-07 and rocket holds no Strava API credentials.
+
+Claude reads Strava through the **official Strava MCP connector**, which is the
+subscriber carve-out for reading one's own data. That path is unaffected and needs
+nothing from rocket. Nothing in the plan depends on Strava: Garmin covers activities
+and wellness, and the routr-publishing idea the old note referred to was never
+possible — Strava has no route-creation endpoint.

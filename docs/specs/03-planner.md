@@ -24,8 +24,8 @@ Replans edit the rolling window only, keep weekly load target if achievable, oth
 - Ramp cap: weekly run km ≤ +15% week-over-week (rebuild weeks after forced rest may use the pre-rest baseline).
 - ≥1 full rest or swim-only day per week.
 - No quality session while soreness ≥ moderate or readiness red.
-- Taper is protected: final 2 weeks, no session may be added that raises weekly load above taper targets; LDNX 10K is the only intensity in taper week 1.
-- Race roles are enforced: Lincoln executed at marathon pace, not raced; Dorney easy.
+- Taper is protected: final 2 weeks, no session may be added that raises weekly load above taper targets. **The taper cuts volume, not intensity** (Bosquet 2007: volume down 41-60% over two weeks, frequency and intensity held) — so the ASICS LDNX 10K on **2026-10-11** is not an exception to the taper, it is the intensity the taper is supposed to keep.
+- Race roles are enforced: Lincoln Half (2026-10-04) executed at marathon pace inside a longer session, not raced. Dorney was dropped on 2026-09-07 and no longer places a session; `RACES` in `config/training.ts` is the authority on which fixtures stand.
 - Guardrail conflict response pattern: state the rule, quantify the cost of breaking it, offer the closest compliant alternative, let the user explicitly override all but taper/injury gates (overrides are logged).
 
 ## Aggression policy

@@ -263,7 +263,12 @@ describe('long runs', () => {
  * race data existed for anything to check against. Found by adversarial review F6.
  */
 describe('races and session placement', () => {
-  it('never places a long session on a live race date uninvited', () => {
+  // NOTE the exact property, which is weaker than "no long session on a race
+  // date": three of six DO sit on race days by design. What is guaranteed is
+  // that a long session on a race date must NAME the race carrying it, so a
+  // collision cannot arrive silently -- which is the bug this was written for
+  // (the block once put a 35 km run on Lincoln Half day with nothing declared).
+  it('never places a long session on a live race date without naming the race that carries it', () => {
     const trespassing = BLOCK_WEEKS.filter(
       (w) =>
         w.longRunDate !== null &&
@@ -351,12 +356,33 @@ describe('single-session spike', () => {
     return at.toISOString().slice(0, 10);
   };
 
-  it('flags one session in the whole block, at 123% of the month before it', () => {
+  it('flags both planner-chosen spikes, including the one wrapped around a race', () => {
+    // Two, not one. The 33 km on Lincoln day used to be invisible because the
+    // exemption skipped the whole date; it is 21.1 km of race plus ~12 km the
+    // planner chose, and the tissue runs all 33. Narrowing the exemption to a
+    // PURE race is what surfaces it.
     const breaches = singleSessionSpikes(ladder);
 
-    expect(breaches.map((b) => b.date)).toEqual(['2026-09-27']);
+    expect(breaches.map((b) => b.date)).toEqual(['2026-09-27', '2026-10-04']);
     expect(breaches[0]?.baselineKm).toBe(22);
     expect(breaches[0]?.pctOfBaseline).toBeCloseTo(122.7, 0);
+    expect(breaches[1]?.km).toBe(33);
+    expect(breaches[1]?.pctOfBaseline).toBeCloseTo(122.2, 0);
+  });
+
+  it('exempts a pure race but not a race the planner has built a session around', () => {
+    // 12 September is 21.1 km and the race is 21.1 km: nothing was added, so
+    // there is no planner decision to smooth and it is exempt. Add a single
+    // kilometre of warm-up and the session becomes the planner's again.
+    const pure = singleSessionSpikes(ladder).map((b) => b.date);
+    expect(pure).not.toContain('2026-09-12');
+
+    const withWarmUp = ladder.map((s) =>
+      s.date === '2026-09-12' ? { ...s, km: 26 } : s,
+    );
+    expect(singleSessionSpikes(withWarmUp).map((b) => b.date)).toContain(
+      '2026-09-12',
+    );
   });
 
   it('bites: the ladder this replaced spiked 142% on the same day', () => {
@@ -371,11 +397,13 @@ describe('single-session spike', () => {
     });
 
     const breaches = singleSessionSpikes(before);
-    expect(breaches.map((b) => b.date)).toEqual(['2026-09-27']);
+    expect(breaches.map((b) => b.date)).toEqual(['2026-09-27', '2026-10-04']);
     expect(breaches[0]?.baselineKm).toBe(21.1);
     expect(breaches[0]?.pctOfBaseline).toBeCloseTo(142.2, 0);
 
-    const shipped = singleSessionSpikes(ladder)[0]?.pctOfBaseline as number;
+    const shipped = singleSessionSpikes(ladder).find(
+      (b) => b.date === '2026-09-27',
+    )?.pctOfBaseline as number;
     expect(shipped).toBeLessThan((breaches[0]?.pctOfBaseline as number) - 15);
   });
 
@@ -411,6 +439,7 @@ describe('single-session spike', () => {
     const withOldLongRun = [{ date: '2026-08-09', km: 31.5 }, ...ladder];
     expect(singleSessionSpikes(withOldLongRun).map((b) => b.date)).toEqual([
       '2026-09-27',
+      '2026-10-04',
     ]);
   });
 });

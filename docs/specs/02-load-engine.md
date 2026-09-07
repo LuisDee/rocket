@@ -8,7 +8,7 @@ Every Activity gets a training stress score (TSS-like). Inputs, best-available c
 
 **Context multipliers (mandatory):**
 - Elevation: significant descent adds eccentric-load stress *beyond* what pace/HR shows. The 33km/600m trail run that wrecked the athlete scored similar pace-stress to a flat 30km road run that felt easy — the model must separate them.
-- Surface: trail/uneven > road for musculoskeletal cost at equal cardio cost. Track cardio stress and musculoskeletal stress as **two components**, not one number.
+- Surface: trail/uneven > road for musculoskeletal cost at equal cardio cost. The model is **designed** to carry cardio and musculoskeletal stress as two components rather than one number. Deferred, not built: no validated computed split exists (the closest precedents are Polar's Muscle Load and Stryd's LBSS, neither independently validated), so the first release accounts total load only, as `07-wiring-todo.md:35` says. The two-component shape is what the schema accommodates; it is not what the first release computes.
 - Footwear novelty: first/early uses of a shoe add musculoskeletal stress. Decay the multiplier as uses accumulate.
 - Swim: real training stress (learning stroke is fatiguing) but near-zero musculoskeletal/impact component. This is why swim continues untouched during run-recovery weeks.
 
@@ -21,7 +21,7 @@ Every Activity gets a training stress score (TSS-like). Inputs, best-available c
 ## Readiness score (daily)
 Computed each morning after check-in:
 - Subjective: soreness (dominant term — severe DOMS gates all quality regardless of anything else), sleep, motivation, yesterday-RPE.
-- Objective when available: HRV vs baseline, resting HR vs baseline, body battery, sleep score.
+- Objective when available: HRV vs baseline, resting HR vs baseline, body battery, sleep score. **Capped at 30% of the score** (`READINESS.objectiveShareWhenAvailable`), and **veto-only**: an objective term can move green to amber but never amber to green (`objectiveCanOnlyDowngrade`, applied as a `min()` against the subjective verdict). Subjective measures are the more sensitive and consistent signal (Saw 2016 BJSM), HRV-guided training shows g = 0.30 on submaximal physiology and a non-significant g = 0.08 on performance (Düking 2021), and wrist HRV carries RMSSD errors over 100 ms in some users. HRV enters as a **7-day rolling mean against a 60-day baseline** with a smallest-worthwhile-change band, never a raw daily value.
 - Output: `green | amber | red` + short rationale string surfaced to the user.
 - Red ⇒ today becomes easy/swim/rest, replan triggers. Amber ⇒ intensity capped. Missing Garmin data must not distort the score — weights renormalize.
 

@@ -100,7 +100,11 @@ export const RACES = [
   },
 ] as const;
 
-/** Race dates that still stand. A session may not land on one uninvited. */
+/**
+ * Race dates that still stand. A long session may land on one only if its week
+ * names the race in `longRunOnRace` -- the race then carries the session rather
+ * than competing with it. Silence is what is forbidden, not the collision.
+ */
 export const LIVE_RACE_DATES: readonly string[] = RACES.filter(
   (r) => r.role !== 'dropped',
 ).map((r) => r.date);
@@ -153,8 +157,15 @@ export const GUARDRAILS = {
    * exists to serve. A breach is named and costed per
    * docs/specs/03-planner.md:28, and can always be overridden.
    *
-   * Sessions on LIVE_RACE_DATES are exempt by declaration: a race distance was
-   * chosen months ago and is not a planner decision to smooth.
+   * A PURE race is exempt by declaration: the distance was chosen months ago and
+   * is not a planner decision to smooth. A race the planner has wrapped extra
+   * distance around is NOT exempt, and the whole session is measured -- week 4's
+   * 33 km on Lincoln day is 21.1 km of race plus ~12 km the planner chose this
+   * week and could change tomorrow. Netting the race out would score the 12 km
+   * against a 27 km baseline, pass trivially, and hide the block's largest
+   * single session from the rule built to see it. The tissue runs 33 km either
+   * way. (Discovered 2026-09-07: the date-level exemption made the peak session
+   * invisible to this guardrail.)
    *
    * PROVISIONAL -- 110 is the population inflection, not a value fitted to this
    * athlete. Note the hazard ratios are non-monotonic (1.64 at 10-30 %, 1.52 at
@@ -287,6 +298,16 @@ export type SpikeBreach = {
  * which is the only baseline that exists before a block is run; once it is
  * running the planner passes actual completed runs and gets the real figure.
  */
+/**
+ * Distance of the live race on `date`, or null when no race stands that day.
+ * Dropped races do not count -- Dorney carries distanceKm: null and role
+ * 'dropped', so it can never exempt anything.
+ */
+function raceDistanceOn(date: string): number | null {
+  const race = RACES.find((r) => r.date === date && r.role !== 'dropped');
+  return race?.distanceKm ?? null;
+}
+
 export function singleSessionSpikes(
   sessions: readonly SpikeSession[],
   windowDays = 30,
@@ -296,7 +317,8 @@ export function singleSessionSpikes(
   );
 
   return inDateOrder.flatMap((session, i) => {
-    if (LIVE_RACE_DATES.includes(session.date)) return [];
+    const raceKm = raceDistanceOn(session.date);
+    if (raceKm !== null && session.km <= raceKm) return [];
 
     const windowStart = shiftIsoDate(session.date, -windowDays);
     const baselineKm = inDateOrder

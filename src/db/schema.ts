@@ -218,5 +218,41 @@ export const checkIns = pgTable(
   (t) => [index('check_ins_local_date_idx').on(t.localDate)],
 );
 
+/**
+ * Free-form notes that change the plan but arrive as conversation.
+ *
+ * "I'm in Leeds Thursday" and "my calf is tight" are planning inputs, and
+ * Claude's own memory is per-account, synthesised daily and not readable by
+ * this server -- so anything not written here is lost the moment the
+ * conversation ends. This is the table that stops the coach forgetting.
+ *
+ * MUTABLE, deliberately, and so NOT in APPEND_ONLY_TABLES: a note is a
+ * statement about the near future that gets corrected ("actually it's
+ * Wednesday") or withdrawn. Activities and check-ins are the historical record
+ * and cannot be edited; a note is not history.
+ *
+ * `expiresAt` is what keeps rocket_get_status short -- an availability note for
+ * last Thursday should stop being surfaced without anyone tidying it away.
+ */
+export const notes = pgTable(
+  'notes',
+  {
+    id: text('id').primaryKey(),
+    /** The day the note is ABOUT, not the day it was said. */
+    localDate: date('local_date').notNull(),
+    kind: text('kind', {
+      enum: ['availability', 'wellness', 'constraint', 'free_text'],
+    }).notNull(),
+    text: text('text').notNull(),
+    source: text('source', { enum: ['chat', 'checkin', 'cron'] }).notNull(),
+    /** Null means it stands until withdrawn. */
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('notes_local_date_idx').on(t.localDate)],
+);
+
 /** Tables the append-only guards protect. The migration and tests both read this. */
 export const APPEND_ONLY_TABLES = ['activities', 'check_ins'] as const;

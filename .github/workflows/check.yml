@@ -117,4 +117,3 @@ jobs:
       # project: an MFA code that never reaches the library, and a Strava grant
       # missing activity:read_all. Both fail invisibly in production.
       - run: uv run --directory tools/garmin_probe pytest -q
-      - run: uv run --directory tools/strava_probe pytest -q

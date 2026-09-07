@@ -59,6 +59,16 @@ so rather than implying live data.
 - [x] Decision-log entry
 - [x] Gates green
 
+## Port boundary for web push (recorded per ledger F24)
+
+When push lands, the port target is DoHardThings' `lib/sw-push.ts`, `lib/push-*`
+and `app/sw.ts` (~350 lines) plus its payload normalisation — **not**
+`components/pwa/`, which is a mock-Safari install walkthrough irrelevant on
+iOS 26 and drags in motion, lucide-react, sonner and @base-ui as new
+dependencies. Serwist is not usable here either: it is a webpack plugin and
+Next 16 defaults to Turbopack, so the service worker is hand-written (~20 lines,
+push only).
+
 ## Commits
 
 - `866f7b6` feat(app): the block on the home screen

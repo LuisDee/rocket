@@ -719,3 +719,175 @@ before it is built, and it is not this entry's to decide.
 application still exists under his account.
 
 **Status:** ACTIVE
+
+## 2026-09-07 -- scope for the 48 days: a thin working coach, not a complete one
+
+**Context:** the adversarial review's section 8 Q4 put two options to Luis. Ship a
+thin vertical slice in about two weeks and defer the rest past the race, or run
+this block by hand with a Claude Project and build rocket properly for the spring.
+48 days to the goal race, of which the last two are taper.
+
+**Decision:** option A. Ship the thin working coach: five Neon tables, the
+deterministic planner and guardrails over `BLOCK_WEEKS`, five tools behind a
+bearer for Claude Code, a one-page check-in, a daily sync and the watch push.
+
+**Alternatives rejected:** option B, running the block by hand. It is what happens
+by default if A is not chosen deliberately, and it generates none of the
+prediction-versus-outcome pairs the calibration milestone needs -- only running a
+real block through the system does that.
+
+**Consequences:** deferred past 2026-10-24 and recorded in the plan's register --
+the two-component load model, the readiness implementation, the capability-pack
+seams to routr and DoHardThings, and the deep database guard stack. Nothing cut is
+foundation: append-only history, thresholds as cited data, the deterministic
+planner and the write-tool contract all survive and all land before the race.
+
+**Status:** ACTIVE
+
+## 2026-09-07 -- intervals.icu is the primary Garmin bridge; the probe stays as a fallback
+
+**Context:** review finding F18. Two ways to get Fenix 8 data in. The unofficial
+`python-garminconnect` probe is already built, guarded and working, and exposes
+everything Garmin holds including the Training Readiness sub-factors and Garmin's
+own acute/chronic pair. intervals.icu holds official Garmin partner OAuth, relays
+the wellness metrics within minutes of a sync, computes fitness and fatigue, and
+can push a planned session onto the watch.
+
+**Decision:** intervals.icu as the primary bridge and the outbound watch push,
+with the `python-garminconnect` probe retained as a manual fallback for deep pulls
+and backfill. Luis delegated this choice explicitly -- "literally whatever idk
+you're the pro at this" -- so it is recorded as a judgement made on his behalf and
+reversible on his word.
+
+**Alternatives rejected:** the direct library as primary. Its per-account 429 locks
+the account for 48 to 72 hours with no recovery path, it cannot run on Vercel so it
+needs a machine at home or GitHub Actions, and it broke twice in the twelve months
+to September 2026. Choosing the bridge removes Python from production entirely.
+
+**Consequences:** production rocket becomes a single Node component with one daily
+job and no Python. Field coverage is still unverified -- the G1 probe in
+`07-wiring-todo.md` remains unticked and must run before schema design leans on any
+bridge-supplied field. Garmin's readiness sub-factors are not exposed by the
+bridge; if they turn out to matter, the fallback path is already built.
+
+**Status:** ACTIVE
+
+## 2026-09-07 -- the goal is a range derived from the 12 September half
+
+**Context:** review finding F5. The top-level docs carried an implied goal band of
+3:25 to 3:35, written before a three-week holiday. Garmin predicts 3:35:40 off an
+implied 1:38 half; Luis judges 1:38 "way too ambitious", would love 1:40 and calls
+1:45 realistic. Applying Garmin's own half-to-marathon ratio of 2.196 to 1:45 gives
+roughly 3:50, and with only four long runs banked the back half degrades further
+than any formula predicts.
+
+**Decision:** the goal marathon time is whatever the Battersea Park Half on
+2026-09-12 implies, expressed as a range in `PACE_ESTIMATES.planningBandSeconds`
+and surfaced by `rocket_get_status`. "As fast as possible" is retired as a planning
+input; it remains a motivation and is no longer a number anything derives from.
+
+**Alternatives rejected:** keeping 3:25 to 3:35. Training paces derived from it
+would be faster than current fitness supports, which makes the easy runs not easy
+-- and on a 100 km week that is how the volume becomes the injury rather than the
+adaptation.
+
+**Consequences:** no pace target is locked until 12 September. Every pace in the
+config is provisional until then and is marked so. Once the half is run, the band
+is recomputed and the plan's training paces follow from it.
+
+**Status:** ACTIVE
+
+## 2026-09-07 -- OAuth for the phone is back in the pre-race scope
+
+**Context:** the option-A scope decision above deferred the OAuth 2.1 server past
+the race, on the review's F23 reasoning that ~600 lines of auth work before any
+coaching exists is the wrong order. Luis reversed it the same day: "we can build
+the phone access its quick, we have built a tremendous amount in a few hours."
+
+**Decision:** the connector work returns to the pre-race path. It stays sequenced
+AFTER the planner and the check-in loop -- the sound half of F23, since a coach
+that does not work from Claude Code is not worth putting on a phone -- and the
+claude.ai connector dialog is checked first, because if it offers a static header
+or none, the OAuth server may not be needed at all.
+
+**Alternatives rejected:** leaving it deferred. The estimate it rested on was
+inherited from the review rather than measured, and a day's observed velocity
+contradicted it.
+
+**Consequences:** the OAuth row leaves the plan's Deferred-Items Register and its
+RATIFIED-out classification is withdrawn. The DoHardThings shim moves back up the
+lift table. One acceptance criterion is mandatory rather than advisory: DHT's
+`app/api/mcp/oauth/authorize/route.ts:42-57` mints an authorization code for ANY
+Google account that completes sign-in -- no allowlist, and no `signIn` callback in
+`lib/auth.ts`. rocket is single-user and private, so the owner-email allowlist ships
+with a negative test asserting a non-owner is refused.
+
+**Status:** ACTIVE
+
+## 2026-09-07 -- returningFromRestRampCapPct is deleted, superseding its provisional entry
+
+**Context:** the 2026-08-15 entry "ramp cap contradiction, unresolved" set
+`GUARDRAILS.returningFromRestRampCapPct` to 35 as "a placeholder chosen to make the
+seed block expressible" and left it PROVISIONAL pending ratification. That entry
+cannot be edited -- the log is append-only -- so this supersedes it.
+
+**Decision:** the field is deleted. The block it existed to express was replaced on
+2026-09-06 by the 60/80/100/80/60 shape Luis ratified, whose single exemption is
+week 2's and is marked RATIFIED rather than provisional. The test is rewritten
+against `ACTIVE_RAMP_CAP_PCT` plus the RATIFIED marker.
+
+**Alternatives rejected:** ratifying 35. Nothing now needs it: no week in the
+committed block invokes a returning-from-rest allowance, so ratifying would preserve
+a number with no caller.
+
+**Consequences:** the 2026-08-15 entry is SUPERSEDED by this one. The plan's open
+question 3 and its Stage 6 blocker are removed -- both described config that no
+longer exists.
+
+**Status:** ACTIVE, superseding the 2026-08-15 ramp-cap entry
+
+## 2026-09-07 -- static_headers is not a path to phone access
+
+**Context:** F23 suggested checking whether the claude.ai connector dialog offers a
+static header before building an OAuth server. It was investigated during the plan
+rewrite and the answer recorded there rather than here, which is the wrong artefact
+-- the decision log exists precisely so a settled question is not re-asked.
+
+**Decision:** `static_headers` is not available for this use. It is an Anthropic
+Beta described as a fixed credential entered by an organization, not a personal
+connector option. Phone access therefore requires the OAuth flow.
+
+**Alternatives rejected:** waiting to discover this at connector-add time, which is
+what DoHardThings and routr both did -- routr's connector guide records that
+claude.ai "discards static tokens and insists on the flow", established the hard way.
+
+**Consequences:** the OAuth shim is required rather than contingent. The dialog is
+still worth a five-minute look before the work starts, in case the offering has
+changed.
+
+**Status:** ACTIVE
+
+## 2026-09-07 -- the single-session spike exemption is narrowed to pure races
+
+**Context:** F7 added `singleSessionSpikePct` measured against the trailing-30-day
+longest run, exempting any session falling on a live race date. The independent
+verification found that this made the block's largest single session invisible to
+it: week 4 is 33 km on Lincoln Half day, of which 21.1 km is the race and roughly
+12 km is warm-up and cool-down the planner chose this week.
+
+**Decision:** the exemption applies only to a PURE race -- a session whose distance
+does not exceed the race distance. A race the planner has built a longer session
+around is measured in full.
+
+**Alternatives rejected:** netting the race distance out and measuring the
+remainder, which the verification suggested. That scores ~12 km against a 27 km
+baseline, passes trivially, and hides the session it was meant to surface. The
+tissue runs 33 km either way; the denominator does not care which kilometres had a
+race number pinned to them.
+
+**Consequences:** the block now reports two breaches rather than one -- 27 km on
+27 September at 123%, and 33 km on 4 October at 122%, the latter naming Lincoln as
+the race it contains. Both are advisory and neither blocks. Four tests fail if the
+old date-level exemption is restored.
+
+**Status:** ACTIVE
