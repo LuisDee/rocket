@@ -136,15 +136,32 @@ export const GUARDRAILS = {
   rampMode: 'aggressive',
 
   /**
-   * A week whose predecessor is not a valid ramp baseline -- forced rest, or a
-   * race taper -- measures its rise against the last normal training week
-   * instead (MEASURED_BASE.preTaperBaselineKm).
+   * Single-session spike cap: a run reaches at most this percentage of the
+   * longest COMPLETED run in the trailing 30 days.
    *
-   * PROVISIONAL. The original seed-block contradiction this documented is gone
-   * with the re-derived block, but the number itself was never ratified.
-   * See docs/decisions.md 2026-08-15 and 2026-09-06.
+   * On the axis the evidence actually supports. Nielsen 2025 (BJSM 59:1203,
+   * Garmin-RUNSAFE: 5,205 runners, ~600,000 sessions) finds injury hazard
+   * rising once a single session passes ~110 % of the trailing-30-day longest
+   * run, while week-to-week load ratios were not significant and ACWR was
+   * inversely associated. The caps above guard the axis the largest prospective
+   * dataset to date nulls; this one guards the axis it supports. Both stay --
+   * a weekly cap is still how a block's slope gets negotiated.
+   *
+   * ADVISORY, NEVER A BLOCKER, and that is structural rather than lenient: the
+   * goal marathon is 128 % of the longest run that can precede it under every
+   * constructible version of this block, so a hard version refuses the race it
+   * exists to serve. A breach is named and costed per
+   * docs/specs/03-planner.md:28, and can always be overridden.
+   *
+   * Sessions on LIVE_RACE_DATES are exempt by declaration: a race distance was
+   * chosen months ago and is not a planner decision to smooth.
+   *
+   * PROVISIONAL -- 110 is the population inflection, not a value fitted to this
+   * athlete. Note the hazard ratios are non-monotonic (1.64 at 10-30 %, 1.52 at
+   * 30-100 %, 2.28 above 100 %), so only the binary over-or-under carries
+   * signal. Do not read a smaller breach as proportionally safer.
    */
-  returningFromRestRampCapPct: 35,
+  singleSessionSpikePct: 110,
 
   /**
    * Above this weekly volume, the week must be spread across at least
@@ -162,15 +179,69 @@ export const GUARDRAILS = {
   /** Minimum full rest or swim-only days per week. */
   minRestOrSwimOnlyDaysPerWeek: 1,
 
-  /** Max quality (intensity) sessions per week during the build phase. */
+  /**
+   * Max quality (intensity) sessions per week during the build phase.
+   *
+   * Held at 1 on 2026-09-07 against an argued case for 2 (review F15), and both
+   * sides are recorded because the losing one is strong. FOR two: Filipas 2022
+   * is a 60-runner RCT and the best-controlled citation in the appendix, a
+   * 3:50-4:00 runner's limiter is marathon-pace durability, and one a week
+   * yields about three structured sessions in the entire block. AGAINST, and
+   * decisive here: Filipas measured ~1.5 % over 5 km in well-trained runners on
+   * STABLE volume across 16 weeks, whereas this is three build weeks inside a
+   * 35 -> 100 km ramp roughly 75 % above anything in MEASURED_BASE, in a new
+   * shoe. Doherty 2020's meta-regression over 127 cohorts ties faster marathons
+   * to weekly km, runs per week, longest run and the count of 32 km+ runs --
+   * volume parameters, not quality count -- and a second interval session draws
+   * on the same recovery budget as the easy kilometres that evidence rewards.
+   * The block is also not short of intensity: RACES puts a maximal half on
+   * 12 Sep, Lincoln at marathon pace on 4 Oct and a raced 10K on 11 Oct.
+   */
   maxQualitySessionsPerWeekBuild: 1,
 
   /** Quality sessions never fall on consecutive days. */
   minDaysBetweenQualitySessions: 2,
 
+  /**
+   * A race spends the weekly quality budget.
+   *
+   * The ambiguity was worth more than the 1-versus-2 argument: nothing said
+   * whether a race counted, so week 4 could legally hold Lincoln at marathon
+   * pace AND a separate interval session on top of a 100 km peak -- the exact
+   * stacking the cap exists to prevent. Marathon-pace segments INSIDE a long
+   * run do NOT count separately; they are part of that long session, not a
+   * second one. Computed by qualitySessionCount().
+   */
+  racesCountAsQualitySessions: true,
+
   /** The final N weeks are protected: nothing may be added above target. */
   protectedTaperWeeks: 2,
 } as const;
+
+/**
+ * Stable rule ids, so a planner decision can name the rules it applied and the
+ * ones it broke -- the `applied_rules[]` / `violated_rules[]` every write tool
+ * returns (review S6.9, F28). Ids are a wire contract: add, never rename.
+ *
+ * A map rather than an `id` field on each threshold, because rules are not
+ * one-to-one with fields: the weekly cap is three of them, the high-volume
+ * spread rule is two. No rules table either -- this file already IS the
+ * registry, and prose comments carry reasoning a `citation` column cannot. The
+ * `satisfies` clause makes a guardrail added without an id a typecheck failure,
+ * and the test asserts every field is claimed exactly once.
+ */
+export const GUARDRAIL_RULE_IDS = {
+  'weekly-ramp-cap': ['rampCapPct', 'aggressiveRampCapPct', 'rampMode'],
+  'single-session-spike': ['singleSessionSpikePct'],
+  'high-volume-spread': ['highVolumeThresholdKm', 'minRunDaysAtHighVolume'],
+  'weekly-recovery-days': ['minRestOrSwimOnlyDaysPerWeek'],
+  'quality-session-budget': [
+    'maxQualitySessionsPerWeekBuild',
+    'minDaysBetweenQualitySessions',
+    'racesCountAsQualitySessions',
+  ],
+  'protected-taper': ['protectedTaperWeeks'],
+} as const satisfies Record<string, readonly (keyof typeof GUARDRAILS)[]>;
 
 /**
  * The ramp cap actually in force. Everything that checks a ramp reads this
@@ -181,6 +252,109 @@ export const ACTIVE_RAMP_CAP_PCT: number =
   GUARDRAILS.rampMode === 'aggressive'
     ? GUARDRAILS.aggressiveRampCapPct
     : GUARDRAILS.rampCapPct;
+
+/** One run -- planned or completed -- as the spike check sees it. */
+export type SpikeSession = {
+  readonly date: string;
+  readonly km: number;
+};
+
+/** A session that exceeded the single-session spike cap. */
+export type SpikeBreach = {
+  readonly ruleId: 'single-session-spike';
+  readonly date: string;
+  readonly km: number;
+  /** Longest run inside the trailing window before `date` -- the denominator. */
+  readonly baselineKm: number;
+  readonly pctOfBaseline: number;
+};
+
+/**
+ * Every session exceeding GUARDRAILS.singleSessionSpikePct of the longest run
+ * in the preceding `windowDays`. Advisory: the caller states the breach and its
+ * cost and may proceed. See the guardrail's own docstring for why never a
+ * blocker.
+ *
+ * Takes the whole series and returns each figure with the baseline it was
+ * measured against, rather than leaving a caller to eyeball a list of runs and
+ * decide what the longest one was -- that failure has already happened once
+ * here (docs/decisions.md 2026-09-06, the block that had not collapsed).
+ *
+ * Sessions on LIVE_RACE_DATES are skipped. A session with no run at all inside
+ * its window has no baseline to spike against and is not a breach.
+ *
+ * At planning time the earlier planned sessions stand in for completed ones,
+ * which is the only baseline that exists before a block is run; once it is
+ * running the planner passes actual completed runs and gets the real figure.
+ */
+export function singleSessionSpikes(
+  sessions: readonly SpikeSession[],
+  windowDays = 30,
+): SpikeBreach[] {
+  const inDateOrder = [...sessions].sort((a, b) =>
+    a.date.localeCompare(b.date),
+  );
+
+  return inDateOrder.flatMap((session, i) => {
+    if (LIVE_RACE_DATES.includes(session.date)) return [];
+
+    const windowStart = shiftIsoDate(session.date, -windowDays);
+    const baselineKm = inDateOrder
+      .slice(0, i)
+      .filter((prior) => prior.date >= windowStart)
+      .reduce((longest, prior) => Math.max(longest, prior.km), 0);
+    if (baselineKm === 0) return [];
+
+    const pctOfBaseline = (session.km / baselineKm) * 100;
+    if (pctOfBaseline <= GUARDRAILS.singleSessionSpikePct) return [];
+
+    return [
+      {
+        ruleId: 'single-session-spike' as const,
+        date: session.date,
+        km: session.km,
+        baselineKm,
+        pctOfBaseline,
+      },
+    ];
+  });
+}
+
+/**
+ * Quality sessions a week actually spends, races included when
+ * GUARDRAILS.racesCountAsQualitySessions says they count.
+ *
+ * A week with no per-day plan counts its races only -- a null `days` means
+ * unscheduled, not zero. A quality day that IS a race is one session, not two.
+ */
+export function qualitySessionCount(week: {
+  readonly monday: string;
+  readonly days:
+    readonly { readonly date: string; readonly kind: string }[] | null;
+}): number {
+  const weekEnd = shiftIsoDate(week.monday, 7);
+  const planned = (week.days ?? []).filter(
+    (day) => day.kind === 'quality' && !LIVE_RACE_DATES.includes(day.date),
+  ).length;
+  const races = GUARDRAILS.racesCountAsQualitySessions
+    ? LIVE_RACE_DATES.filter((date) => date >= week.monday && date < weekEnd)
+        .length
+    : 0;
+
+  return planned + races;
+}
+
+/**
+ * `YYYY-MM-DD` shifted by whole days. UTC arithmetic on purpose: these are
+ * calendar dates with no time of day, and this block spans the October clock
+ * change, where a local-midnight shift is off by an hour and can cross a day.
+ */
+function shiftIsoDate(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const at = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1));
+  at.setUTCDate(at.getUTCDate() + days);
+  return at.toISOString().slice(0, 10);
+}
 
 /**
  * What the athlete's week actually contains, corrected 2026-09-06.
@@ -204,6 +378,27 @@ export const AVAILABILITY = {
   swimSessionsPerWeek: 1,
   swimSessionHours: 2,
 
+  /**
+   * Where the swim actually sits in the evening. Captured, not modelled --
+   * nothing reads these (review S6.7).
+   *
+   * The candidate use is the one the review proposed and the ledger rejected: a
+   * swim finishing late compresses sleep, so the next morning's HRV and
+   * sleep-score terms are suspect (Leota 2025, 14,689 people, 4 million
+   * nights). That term is NOT implemented -- measured sleep beats inferred
+   * sleep, and there is no measured overnight data to correct anyway. But the
+   * end time is recorded nowhere, so without capturing it the question could
+   * never be answered retrospectively even once the data arrives. One constant
+   * buys the option.
+   *
+   * PROVISIONAL: 20:00 comes from PLAN-2026-001:158 ("swim evenings land
+   * ~20:00"), a passage written under the superseded five-evenings premise; the
+   * end is start plus swimSessionHours. The weekday is recorded nowhere and is
+   * deliberately not guessed here.
+   */
+  swimSlotStartLocal: '20:00',
+  swimSlotEndLocal: '22:00',
+
   /** Evenings not taken by swimming, and therefore available for running. */
   freeEveningsPerWeek: 6,
 
@@ -214,9 +409,17 @@ export const AVAILABILITY = {
 /**
  * Load model. docs/specs/02-load-engine.md:15-18.
  *
- * Stress is tracked as TWO components -- cardio and musculoskeletal -- not one
- * number. That is what lets swim volume continue untouched through a
+ * Stress is DESIGNED as two components -- cardio and musculoskeletal -- not one
+ * number. That is what would let swim volume continue untouched through a
  * run-recovery week: real cardio stress, near-zero impact cost.
+ *
+ * The first release scores TOTAL LOAD ONLY. The musculoskeletal component is
+ * Stage 8, deferred past the 2026-10-24 race
+ * (PLAN-2026-001-m1-core-loop.md:124-139, which calls it the weakest bet in the
+ * project and names the revisit trigger). Stated in the designed rather than
+ * the present tense because the present tense read as a description of working
+ * code and contradicted docs/specs/07-wiring-todo.md:35, "start: total-load
+ * only" (review F16).
  */
 export const LOAD = {
   /** Acute load: exponentially-weighted average over this many days. */
@@ -296,8 +499,53 @@ export const READINESS = {
     bodyBattery: 0.1,
   },
 
-  /** Share of the final score taken from objective terms when available. */
-  objectiveShareWhenAvailable: 0.4,
+  /**
+   * Share of the final score taken from objective terms when available.
+   *
+   * Cut from 0.4 on 2026-09-07 (review F12). Renormalising over missing terms
+   * does not protect the score, it CONCENTRATES it:
+   * tools/garmin_probe/CATALOGUE.md:20-25 records hrv_day, hrv_range_7d and
+   * sleep_daily_7d empty across a seven-day probe, and sleep_day's stage and
+   * start-time fields null -- the watch is not worn asleep. With hrvVsBaseline
+   * (0.4) and sleepScore (0.2) absent, the survivors renormalise to 0.75
+   * restingHrVsBaseline and 0.25 bodyBattery, which at a 0.4 share puts a tenth
+   * of the entire verdict on Body Battery, a Firstbeat composite with no
+   * independent validation, and 30 % on one resting-HR reading. Declining
+   * Garmin's own Training Readiness as the score (docs/decisions.md:245-247)
+   * while sourcing 40 % of ours from the same sensor stack is that bet with an
+   * extra step.
+   *
+   * Stage 9 must surface WHICH objective terms were present rather than
+   * silently renormalising, so a thin day reads as thin instead of as fact.
+   */
+  objectiveShareWhenAvailable: 0.3,
+
+  /**
+   * Objective terms may only lower the score, never raise it:
+   *
+   *   score = min(subjective, (1 - share) * subjective + share * objective)
+   *
+   * One expression, veto-only by construction -- good watch numbers cannot lift
+   * an amber morning to green, while a genuinely bad night still pulls the
+   * verdict down. The asymmetry is the point: the subjective terms are reported
+   * by the athlete, and the objective ones come from a sensor stack whose
+   * weakest input has no published validation.
+   */
+  objectiveCanOnlyDowngrade: true,
+
+  /**
+   * How hrvVsBaseline is read when HRV data exists: a 7-day rolling mean
+   * against a 60-day baseline, banded by half a standard deviation -- never a
+   * raw daily RMSSD, whose day-to-day noise swamps the signal it is being asked
+   * about.
+   *
+   * INERT TODAY: no HRV reaches either candidate source (see above).
+   */
+  hrv: {
+    rollingMeanDays: 7,
+    baselineDays: 60,
+    swcBandSd: 0.5,
+  },
 
   /** Score at or above this is green; at or above amberFloor is amber. */
   greenFloor: 0.7,
@@ -403,8 +651,8 @@ export type DayPlan = {
  * Saturdays before, which merely stacks a 30 km+ run the day before a race, the
  * two races now CARRY their weeks' long sessions:
  *
- *   - Sun 27 Sep, 30 km, is the last uninterrupted long run of the block.
- *   - Sun  4 Oct, Lincoln Half at marathon pace inside a ~35 km day.
+ *   - Sun 27 Sep, 27 km, is the last uninterrupted long run of the block.
+ *   - Sun  4 Oct, Lincoln Half at marathon pace inside a ~33 km day.
  *   - Sun 11 Oct, LDNX 10K hard inside a ~16 km day.
  *
  * Every long session now carries `longRunDate`, and `longRunOnRace` names the
@@ -416,6 +664,17 @@ export type DayPlan = {
  * ACTIVE_RAMP_CAP_PCT. Under the 35 % aggressive cap exactly one step does, and
  * it is the one that deserves the attention: the return from a race taper into
  * a 60 km week. The 80 (+33 %) and 100 (+25 %) steps sit inside the cap.
+ *
+ * LONG-RUN LADDER RESHAPED 2026-09-07, from 20 / 30 / 35 to 22 / 27 / 33
+ * (review F7). Every weekly total is unchanged; only the distribution inside
+ * three weeks moved. The old 21.1 -> 30 km step on 27 September was 142 % of
+ * the longest run in the preceding thirty days -- the block's one avoidable
+ * single-session spike, and a larger one than either the peak long run (117 %)
+ * or the marathon itself (121 %). The ladder now runs 104 % / 123 % / 122 %
+ * with the marathon at 128 %, so nothing non-exempt sits above ~123 % and the
+ * removal cost two kilometres off the longest run of the block. Computed by
+ * singleSessionSpikes(); see GUARDRAILS.singleSessionSpikePct for why the rule
+ * warns rather than blocks.
  *
  * The honest risk, recorded because docs/specs/03-planner.md:28 requires a
  * breach to be named and costed rather than silently executed: 100 km is
@@ -447,7 +706,7 @@ export const BLOCK_WEEKS = [
     monday: '2026-09-14',
     phase: 'rebuild',
     targetKm: 60,
-    longRunKm: 20,
+    longRunKm: 22,
     longRunDate: '2026-09-19',
     longRunOnRace: null,
     minRunDays: 6,
@@ -466,14 +725,16 @@ export const BLOCK_WEEKS = [
       },
       { date: '2026-09-15', km: 8, kind: 'easy' },
       { date: '2026-09-16', km: 10, kind: 'easy' },
-      { date: '2026-09-17', km: 10, kind: 'easy' },
+      // Two kilometres moved from here onto the long run, so the week still
+      // totals 60 while the ladder starts at 22 rather than 20.
+      { date: '2026-09-17', km: 8, kind: 'easy' },
       {
         date: '2026-09-18',
         km: 6,
         kind: 'easy',
         note: 'Short shakeout before the long run.',
       },
-      { date: '2026-09-19', km: 20, kind: 'long' },
+      { date: '2026-09-19', km: 22, kind: 'long' },
       {
         date: '2026-09-20',
         km: 0,
@@ -488,20 +749,20 @@ export const BLOCK_WEEKS = [
     monday: '2026-09-21',
     phase: 'build',
     targetKm: 80,
-    longRunKm: 30,
+    longRunKm: 27,
     longRunDate: '2026-09-27',
     longRunOnRace: null,
     minRunDays: 6,
     rampExemption: null,
     days: null,
-    note: '+33.3%, inside the aggressive cap. Six running days: freed evenings make AM/PM doubles available if a morning is missed. This is the LAST uninterrupted long run of the block -- both remaining long-session slots are races.',
+    note: '+33.3%, inside the aggressive cap. Six running days: freed evenings make AM/PM doubles available if a morning is missed. This is the LAST uninterrupted long run of the block -- both remaining long-session slots are races. Cut from 30 km to 27 on 2026-09-07: against a 22 km trailing-30-day longest, 30 was a 142% single-session spike and 27 is 123%, at no cost to the weekly 80.',
   },
   {
     week: 4,
     monday: '2026-09-28',
     phase: 'peak',
     targetKm: 100,
-    longRunKm: 35,
+    longRunKm: 33,
     longRunDate: '2026-10-04',
     longRunOnRace: 'Lincoln Half Marathon',
     minRunDays: 7,
@@ -509,7 +770,7 @@ export const BLOCK_WEEKS = [
     days: null,
     note:
       'Peak volume and peak long session together, 20 days out. +25%, inside the cap. ' +
-      'The long session IS Lincoln, built as ~8 km easy warm-up + 21.1 km AT MARATHON PACE + ~6 km easy = ~35 km. ' +
+      'The long session IS Lincoln, built as ~8 km easy warm-up + 21.1 km AT MARATHON PACE + ~4 km easy = ~33 km. ' +
       'This turns a race that would otherwise have wrecked the peak week into the best marathon-specific session ' +
       'of the block: a long run with a large marathon-pace block inside it, on tired legs, three weeks out. ' +
       'CONDITION: it requires Lincoln run at marathon pace, not raced flat out. That was the role the original ' +
@@ -551,7 +812,13 @@ export const BLOCK_WEEKS = [
     week: 7,
     monday: '2026-10-19',
     phase: 'race',
-    targetKm: null,
+    // 32 km of easy running Mon-Fri, EXCLUDING the 42.195 of the race itself,
+    // which lives in RACES for the same reason longRunKm below is null. Set on
+    // 2026-09-07 (review F15): the taper was 100 -> 80 -> 60 -> null, and a
+    // null is not a checkable number -- Bosquet 2007 wants a 41-60 % volume cut
+    // held across the taper with frequency and intensity intact, which the last
+    // week could silently violate while reading as planned.
+    targetKm: 32,
     // The marathon is the goal, not a planned training session. It lives in
     // RACES. Counting it here would put 42.195 into every long-run aggregate
     // and make the block's peak long run read as the race itself.

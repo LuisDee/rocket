@@ -6,14 +6,18 @@ import {
   BLOCK,
   BLOCK_WEEKS,
   CHECK_IN_GATES,
+  GUARDRAIL_RULE_IDS,
   GUARDRAILS,
   LIVE_RACE_DATES,
   MEASURED_BASE,
   MULTIPLIERS,
   PACE_ESTIMATES,
+  qualitySessionCount,
   RACES,
   READINESS,
   SHOES,
+  singleSessionSpikes,
+  type SpikeSession,
 } from './training';
 
 /**
@@ -90,17 +94,22 @@ describe('block ramp rate', () => {
     ).toBeLessThanOrEqual(ACTIVE_RAMP_CAP_PCT);
   });
 
-  it('breaches even the returning-from-rest allowance on the rebuild week, so it is a named override not a rule', () => {
+  it('stands the rebuild week on an explicit ratification rather than on any cap', () => {
     // 60 km measured against the 34.8 km pre-taper base is +72.4%: over the
-    // standard cap, over the aggressive cap, and over the returning-from-rest
-    // allowance too. It stands on Luis's explicit ratification, recorded in the
-    // exemption string, and nothing else. That distinction must not blur.
+    // standard cap and over the aggressive one in force. It stands on Luis's
+    // explicit ratification, recorded in the exemption string, and nothing
+    // else. That distinction must not blur.
+    //
+    // This ran against GUARDRAILS.returningFromRestRampCapPct until 2026-09-07
+    // -- a 35 nothing in the repo read and nobody had ratified. Deleted (review
+    // F8): a threshold no code path consumes cannot be the rule a week
+    // breaches, and leaving it invited a later planner to start reading it.
     const rebuild = BLOCK_WEEKS.find((w) => w.week === 2);
     const rise = pctRise(
       MEASURED_BASE.preTaperBaselineKm,
       rebuild?.targetKm as number,
     );
-    expect(rise).toBeGreaterThan(GUARDRAILS.returningFromRestRampCapPct);
+    expect(rise).toBeGreaterThan(ACTIVE_RAMP_CAP_PCT);
     expect(rebuild?.rampExemption).toContain('RATIFIED');
   });
 
@@ -133,6 +142,19 @@ describe('block ramp rate', () => {
       (w) => w.week > (peakWeek?.week as number),
     );
     expect(after).toHaveLength(3);
+  });
+
+  it('gives the race week a target rather than a null, so the taper is checkable', () => {
+    // 100 -> 80 -> 60 -> null read as planned while leaving the last week
+    // unbounded. Bosquet 2007 wants a 41-60% volume cut held across the taper,
+    // which a null cannot express (review F15).
+    const raceWeek = BLOCK_WEEKS.find((w) => w.phase === 'race');
+    const peak = BLOCK_WEEKS.find((w) => w.phase === 'peak');
+
+    expect(raceWeek?.targetKm).not.toBeNull();
+    expect(raceWeek?.targetKm as number).toBeLessThan(
+      (peak?.targetKm as number) / 2,
+    );
   });
 
   it('protects the final weeks named by the taper guardrail', () => {
@@ -198,20 +220,30 @@ describe('long runs', () => {
   );
 
   it('carries six long sessions, three of them carried by races', () => {
-    // 21.1 is the Battersea Half, 35 is Lincoln inside a long day, 16 is LDNX.
-    // Reshaped 2026-09-07: the 26 that used to sit here was a long run on
-    // LDNX day, which is why it is now 16.
-    expect(longRuns).toEqual([21.1, 20, 30, 35, 16, 18]);
+    // 21.1 is the Battersea Half, 33 is Lincoln inside a long day, 16 is LDNX.
+    // Reshaped twice: the 26 that used to sit on LDNX day became 16, and on
+    // 2026-09-07 the 20/30/35 ladder became 22/27/33 to take the 142% spike
+    // off 27 September (review F7).
+    expect(longRuns).toEqual([21.1, 22, 27, 33, 16, 18]);
   });
 
   it('builds to a peak then comes down through the taper', () => {
     const peak = Math.max(...longRuns);
-    expect(peak).toBe(35);
+    expect(peak).toBe(33);
     expect(longRuns.at(-1) as number).toBeLessThan(peak);
   });
 
+  it('keeps the longest run of the block at or above 32 km', () => {
+    // The floor the reshape is not allowed to breach. Doherty 2020 associates
+    // faster marathons with the longest run and the count of 32 km+ runs, and
+    // this block has three build weeks off a 28 km/week base -- it has none of
+    // the chronic volume that makes a Hansons-style short long run work
+    // (review F9).
+    expect(Math.max(...longRuns)).toBeGreaterThanOrEqual(32);
+  });
+
   it('stays inside what the athlete has actually run before', () => {
-    // 35 km against a 42.7 km run recorded w/c 4 May. The long runs are the
+    // 33 km against a 42.7 km run recorded w/c 4 May. The long runs are the
     // least speculative part of this block -- it is the weekly volume that is
     // new territory, not the distance of any single run.
     const peak = Math.max(...longRuns);
@@ -288,6 +320,153 @@ describe('races and session placement', () => {
   });
 });
 
+/**
+ * The guardrail on the axis the evidence supports (Nielsen 2025: hazard rises
+ * once a single run passes ~110% of the trailing-30-day longest, while
+ * week-to-week ratios were not significant). The weekly caps above cannot see
+ * this: they were satisfied by a block whose 27 September long run was 142% of
+ * anything in the previous month.
+ */
+describe('single-session spike', () => {
+  /**
+   * Longest run in the 30 days before the block's first race, from
+   * src/data/recent-activities.json -- the 31.5 km of 9 August falls outside
+   * that window and the 16.0 km of 22 August is the real baseline.
+   */
+  const historySeed: SpikeSession[] = [{ date: '2026-08-22', km: 16.0 }];
+
+  /** The block's long sessions, read from the config rather than restated. */
+  const longSessions: SpikeSession[] = BLOCK_WEEKS.flatMap((week) =>
+    week.longRunKm === null || week.longRunDate === null
+      ? []
+      : [{ date: week.longRunDate, km: week.longRunKm }],
+  );
+
+  const marathon: SpikeSession = { date: BLOCK.goalRaceDate, km: 42.195 };
+  const ladder: SpikeSession[] = [...historySeed, ...longSessions, marathon];
+
+  const dayBefore = (iso: string) => {
+    const at = new Date(`${iso}T00:00:00Z`);
+    at.setUTCDate(at.getUTCDate() - 1);
+    return at.toISOString().slice(0, 10);
+  };
+
+  it('flags one session in the whole block, at 123% of the month before it', () => {
+    const breaches = singleSessionSpikes(ladder);
+
+    expect(breaches.map((b) => b.date)).toEqual(['2026-09-27']);
+    expect(breaches[0]?.baselineKm).toBe(22);
+    expect(breaches[0]?.pctOfBaseline).toBeCloseTo(122.7, 0);
+  });
+
+  it('bites: the ladder this replaced spiked 142% on the same day', () => {
+    // The proof the guardrail is not decorative. Put the 20/30/35 ladder back
+    // and the step the reshape removed reappears, 19 points higher, against a
+    // 21.1 km baseline that was itself a race two weeks earlier.
+    const before = ladder.map((session) => {
+      if (session.date === '2026-09-19') return { ...session, km: 20 };
+      if (session.date === '2026-09-27') return { ...session, km: 30 };
+      if (session.date === '2026-10-04') return { ...session, km: 35 };
+      return session;
+    });
+
+    const breaches = singleSessionSpikes(before);
+    expect(breaches.map((b) => b.date)).toEqual(['2026-09-27']);
+    expect(breaches[0]?.baselineKm).toBe(21.1);
+    expect(breaches[0]?.pctOfBaseline).toBeCloseTo(142.2, 0);
+
+    const shipped = singleSessionSpikes(ladder)[0]?.pctOfBaseline as number;
+    expect(shipped).toBeLessThan((breaches[0]?.pctOfBaseline as number) - 15);
+  });
+
+  it('exempts races, and the exemption is what is doing the work', () => {
+    // Move every race a day earlier and three more breaches appear -- the half
+    // at 132%, Lincoln at 122% and the marathon at 128%. The marathon breaching
+    // by construction is why this rule warns and never blocks: a hard version
+    // would refuse the race the block exists for.
+    const shifted = ladder.map((session) =>
+      LIVE_RACE_DATES.includes(session.date)
+        ? { ...session, date: dayBefore(session.date) }
+        : session,
+    );
+
+    const breaches = singleSessionSpikes(shifted);
+    expect(breaches.map((b) => b.date)).toEqual([
+      '2026-09-11',
+      '2026-09-27',
+      '2026-10-03',
+      '2026-10-23',
+    ]);
+    expect(breaches.at(-1)?.pctOfBaseline).toBeCloseTo(127.9, 0);
+  });
+
+  it('has no baseline to measure the first run against, and says so by silence', () => {
+    expect(singleSessionSpikes([{ date: '2026-09-27', km: 30 }])).toEqual([]);
+  });
+
+  it('ignores runs that have aged out of the trailing window', () => {
+    // The 31.5 km of 9 August is the longest run in the legs and is NOT the
+    // denominator on 27 September, because it is seven weeks old. A window that
+    // silently widened would hide every spike in the block.
+    const withOldLongRun = [{ date: '2026-08-09', km: 31.5 }, ...ladder];
+    expect(singleSessionSpikes(withOldLongRun).map((b) => b.date)).toEqual([
+      '2026-09-27',
+    ]);
+  });
+});
+
+/**
+ * The number 1 was never the defect; its ambiguity was. Nothing said whether a
+ * race spent the budget, so the peak week could legally hold Lincoln at
+ * marathon pace AND a separate interval session on top of 100 km (review F15).
+ */
+describe('quality session budget', () => {
+  it('counts the race that carries the peak week against the budget', () => {
+    const peak = BLOCK_WEEKS.find((w) => w.week === 4);
+    expect(qualitySessionCount(peak as (typeof BLOCK_WEEKS)[number])).toBe(1);
+  });
+
+  it('keeps every week of the block inside the budget', () => {
+    for (const week of BLOCK_WEEKS) {
+      expect(
+        qualitySessionCount(week),
+        `week ${week.week}`,
+      ).toBeLessThanOrEqual(GUARDRAILS.maxQualitySessionsPerWeekBuild);
+    }
+  });
+
+  it('catches an interval session stacked on top of the race that already carries the week', () => {
+    const peak = BLOCK_WEEKS.find((w) => w.week === 4);
+    const stacked = {
+      monday: peak?.monday as string,
+      days: [{ date: '2026-10-01', kind: 'quality' }],
+    };
+
+    expect(qualitySessionCount(stacked)).toBe(2);
+    expect(qualitySessionCount(stacked)).toBeGreaterThan(
+      GUARDRAILS.maxQualitySessionsPerWeekBuild,
+    );
+  });
+
+  it('does not double-count a quality day that is itself the race', () => {
+    const stacked = {
+      monday: '2026-09-28',
+      days: [{ date: '2026-10-04', kind: 'quality' }],
+    };
+    expect(qualitySessionCount(stacked)).toBe(1);
+  });
+});
+
+describe('guardrail rule ids', () => {
+  it('claims every guardrail exactly once, so a decision can name what it applied', () => {
+    // The emission half of review S6.9: applied_rules[] and violated_rules[]
+    // need stable ids, and a guardrail nobody gave one to is a rule the planner
+    // can enforce but cannot cite.
+    const claimed = Object.values(GUARDRAIL_RULE_IDS).flat();
+    expect([...claimed].sort()).toEqual(Object.keys(GUARDRAILS).sort());
+  });
+});
+
 describe('check-in gates', () => {
   it('gates the step up to 80 km on the rebuild week actually going well', () => {
     const gate = CHECK_IN_GATES.find((g) => g.afterWeekMonday === '2026-09-14');
@@ -313,6 +492,19 @@ describe('availability', () => {
     // was wrong, and it made this block look harder than it is.
     expect(AVAILABILITY.swimSessionsPerWeek).toBe(1);
     expect(AVAILABILITY.swimSessionHours).toBe(2);
+  });
+
+  it('records when the swim slot starts and ends, so the option to model it survives', () => {
+    // Capture only -- no readiness term reads these (review S6.7). The point is
+    // that a late finish compressing sleep cannot be evaluated retrospectively
+    // if the time was never written down.
+    const hours = (hhmm: string) =>
+      Number(hhmm.slice(0, 2)) + Number(hhmm.slice(3, 5)) / 60;
+
+    expect(
+      hours(AVAILABILITY.swimSlotEndLocal) -
+        hours(AVAILABILITY.swimSlotStartLocal),
+    ).toBe(AVAILABILITY.swimSessionHours);
   });
 
   it('leaves enough free evenings for a 100 km week to be spread', () => {
@@ -412,6 +604,26 @@ describe('readiness weights', () => {
 
   it('keeps green above amber', () => {
     expect(READINESS.greenFloor).toBeGreaterThan(READINESS.amberFloor);
+  });
+
+  it('keeps the watch below a third of the verdict', () => {
+    // With HRV and sleep score empty across a seven-day probe, renormalising
+    // concentrates rather than protects: at 0.4 a tenth of the whole verdict
+    // lands on Body Battery. The tests above pass through any share, which is
+    // why this one exists (review F12).
+    expect(READINESS.objectiveShareWhenAvailable).toBeLessThanOrEqual(0.3);
+  });
+
+  it('lets the objective block veto a green but never manufacture one', () => {
+    expect(READINESS.objectiveCanOnlyDowngrade).toBe(true);
+  });
+
+  it('reads HRV as a rolling mean against a longer baseline, never a daily value', () => {
+    expect(READINESS.hrv.rollingMeanDays).toBeGreaterThan(1);
+    expect(READINESS.hrv.baselineDays).toBeGreaterThan(
+      READINESS.hrv.rollingMeanDays,
+    );
+    expect(READINESS.hrv.swcBandSd).toBeGreaterThan(0);
   });
 });
 
