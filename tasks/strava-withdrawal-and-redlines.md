@@ -79,4 +79,4 @@ pytest -q` and will fail once that directory is deleted. That file is outside
 
 ## Commits
 
-(populated as work lands)
+- `48f3b7a` chore: withdraw the Strava API and add the two governance redlines
