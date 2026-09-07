@@ -77,3 +77,4 @@ value, and already in hand from the activity list.
 ## Commits
 
 - `1a5c8b2` feat(ingest): pull, crop and inspect a Garmin run into the review queue
+- `98b28eb` fix(ingest): fold accents before slugging, and ingest runs only
