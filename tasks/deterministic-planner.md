@@ -126,3 +126,24 @@ for the two config additions. No schema change, no migration, no tool.
 ## Commits
 
 3cca6a6 feat(planner): guardrails that negotiate, and a window that cannot be walked past them
+
+**Provenance, recorded rather than left to be discovered.** Three commits
+authored under other task files also carry work from this one, because three
+agents shared a worktree and staged shared files while this task's edits sat
+unstaged in them:
+
+- `1d8fd5d` and `2bdbb9d` (`Task: tasks/mcp-surface-and-checkin.md`) carry this
+  task's `src/mcp/tools.ts` and `tools.test.ts` after ownership of both moved
+  here, the `GUARDRAILS.singleSessionSpikeWindowDays` config change, two
+  `docs/ci-gates.md` rows, three `docs/decisions.md` entries, and the
+  `docs/specs/02-load-engine.md` line documenting the readiness input ranges.
+- `420351c` (`Task: none`) swept three of the other task's decision entries the
+  other way.
+
+Nothing is missing and nothing is duplicated -- the sweep was in both
+directions and the content all landed. It is written down because a task file
+that lists one commit for work spread across four is a one-way reference, and
+`tasks/README.md` says one-way references rot. The lesson is the one AGENTS.md
+section 3 already carries: in a shared worktree, stage explicit paths AND
+commit promptly, because an unstaged edit in a file someone else is about to
+stage belongs to whoever commits first.
