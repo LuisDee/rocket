@@ -148,3 +148,4 @@ record-and-decline stub the header describes.
 ## Commits
 
 1d8fd5d feat(mcp): the rocket_ tool surface, its bearer gate, and the daily check-in
+2bdbb9d feat(mcp): the six rocket_ tools themselves, and the plan-authorship gate
