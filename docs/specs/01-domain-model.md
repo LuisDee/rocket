@@ -6,7 +6,6 @@
 
 **Race** — date, name, distance, **role** (`goal | tune-up | rehearsal | sharpener | easy | dropped`), droppable. Live set is `config/training.ts` `RACES`; this list is an extract. Ratified 2026-09-07:
 - 2026-09-12 Battersea Park Half — tune-up (same park as the goal; its result sets goal pace)
-- 2026-10-03 Dorney Triathlon — **dropped** (not attending; retained on the record)
 - 2026-10-04 Lincoln Half — rehearsal (marathon pace, carries week 4's long session)
 - 2026-10-11 ASICS LDNX 10K — sharpener (carries week 5's long session)
 - 2026-10-24 Battersea Park Marathon — **goal**
