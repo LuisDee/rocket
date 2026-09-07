@@ -19,6 +19,7 @@ so the refresh token is the durable credential and is treated as one.
 from __future__ import annotations
 
 import argparse
+import re
 import json
 import os
 import subprocess
@@ -123,7 +124,13 @@ def cmd_exchange(args: argparse.Namespace) -> int:
 def has_scope(granted: str | None, required: str) -> bool:
     """Exact-token match. A substring test would accept `activity:read` for
     `activity:read_all`'s prefix and hand back public-only data forever."""
-    return required in (granted or "").split(",")
+    # Strava is asymmetric and this is the trap: the AUTHORIZE request takes the
+    # scope comma-separated, but the TOKEN RESPONSE hands the granted scope back
+    # SPACE-delimited (observed: "activity:read_all read"). Splitting on comma
+    # therefore never matches, and rejects a perfectly good grant. Split on any
+    # whitespace or comma so both shapes work. Exact-token match still matters --
+    # a substring test would accept `activity:read`, which is public-only.
+    return required in re.split(r"[\s,]+", (granted or "").strip())
 
 
 def main(argv: list[str] | None = None) -> int:
