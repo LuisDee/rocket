@@ -167,8 +167,14 @@ export async function uploadFit(
   file: Buffer,
   filename: string,
   options: {
-    name?: string;
-    description?: string;
+    // No `name` and no `description`, deliberately, and this is not an
+    // oversight to be helpfully corrected. Luis ratified uploading despite
+    // Strava API Policy 5.3 on 2026-09-07 and then asked for the metadata kept
+    // bland: ratifying a risk is not advertising it. A description reading
+    // "pause-cropped by rocket" hands Strava, in writing and attached to the
+    // upload, the exact thing 5.3 prohibits. The activity keeps whatever the
+    // watch called it. Making the fields unrepresentable beats a test that
+    // catches them afterwards.
     externalId?: string;
     fetchImpl?: typeof fetch;
     tokenImpl?: () => Promise<string>;
@@ -182,8 +188,6 @@ export async function uploadFit(
   const form = new FormData();
   form.set('file', new Blob([new Uint8Array(file)]), filename);
   form.set('data_type', 'fit');
-  if (options.name) form.set('name', options.name);
-  if (options.description) form.set('description', options.description);
   if (options.externalId) form.set('external_id', options.externalId);
 
   const started = now();
