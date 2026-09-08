@@ -22,6 +22,7 @@
  * | `avgSpeed`           | cm/ms       | m/s           | x 10   |
  * | `elevationGain/Loss` | centimetres | metres        | / 100  |
  * | `minElevation`       | centimetres | metres        | / 100  |
+ * | `calories`           | KILOJOULES  | `calories`    | /4.184 |
  *
  * `avgSpeed` is the nastiest: a 10 km run in 49:13 stores `0.3386`, and 3.386
  * m/s is the true figure. Read as m/s it is a 49-minute kilometre; read as
@@ -29,6 +30,14 @@
  * The factor was established by dividing distance by duration across all 56
  * activities in the 2026-09-08 export -- median 9.9998, range 9.9964 to
  * 10.0018 -- not by reading documentation.
+ *
+ * `calories` is the one a reader is least likely to doubt, because the field is
+ * named for the unit it is not in. The 2026-05-10 marathon stores 14904, which
+ * as kilocalories is 349 kcal/km -- roughly four times what a human burns. As
+ * kilojoules it is 3562 kcal, or 83.5 kcal/km, which is the ~1 kcal/kg/km an
+ * 85.5 kg runner actually costs. Confirmed against an independent oracle: the
+ * daily summaries in `DI-Connect-Aggregator/UDSFile_*.json` give
+ * `activeKilocalories` 3737 for that day.
  *
  * `avgRunCadence` is per-leg (74) and `avgDoubleCadence` is both (148.6). The
  * column means steps per minute, so the double is the one that belongs in it.
@@ -139,6 +148,11 @@ const MS_TO_S = 1000;
  * module comment -- 1 cm/ms is 10 m/s.
  */
 const SPEED_TO_M_S = 10;
+/**
+ * Kilojoules to kilocalories. The export's `calories` field is kJ despite the
+ * name; the thermochemical calorie is 4.184 J exactly.
+ */
+const KJ_TO_KCAL = 4.184;
 
 /**
  * Pull the activity list out of the export file's envelope.
@@ -239,7 +253,7 @@ export function toActivityRow(activity: ExportActivity): BackfillRow | null {
     aerobicTrainingEffect: num(activity.aerobicTrainingEffect),
     anaerobicTrainingEffect: num(activity.anaerobicTrainingEffect),
     trainingEffectLabel: str(activity.trainingEffectLabel),
-    calories: num(activity.calories),
+    calories: scale(activity.calories, 1 / KJ_TO_KCAL),
     lapCount: int(activity.lapCount),
     deviceId: activity.deviceId == null ? null : String(activity.deviceId),
     manufacturer: str(activity.manufacturer),

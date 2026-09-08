@@ -199,6 +199,29 @@ describe('load and absent fields', () => {
     );
   });
 
+  test('calories are converted from the kilojoules the field actually holds', () => {
+    // 2543.34 kJ over 49:13 is 608 kcal, which is what a 49-minute run costs.
+    // Left raw it reads 2543 kcal for one treadmill session -- a day's food.
+    expect(toActivityRow(TREADMILL)?.calories).toBeCloseTo(607.9, 1);
+  });
+
+  test('the marathon burns ~83 kcal per km, not ~350', () => {
+    // The check that makes the unit unarguable, on the biggest session in the
+    // record: 2026-05-10, 42.67 km, raw 14904. At 85.5 kg, roughly 1 kcal per
+    // kg per km is the expected cost, so ~85 kcal/km. Verified independently
+    // against UDSFile activeKilocalories (3737) for the same day.
+    const marathon = toActivityRow({
+      ...TREADMILL,
+      activityId: 1,
+      distance: 4267000.0,
+      calories: 14904.0,
+    });
+    const perKm =
+      (marathon?.calories ?? 0) / ((marathon?.distanceM ?? 0) / 1000);
+    expect(perKm).toBeGreaterThan(70);
+    expect(perKm).toBeLessThan(100);
+  });
+
   test('a treadmill run keeps null elevation rather than gaining a zero', () => {
     // Zero metres climbed and no altimeter reading are different facts, and
     // averaging a fabricated zero into elevation stats would understate hills.

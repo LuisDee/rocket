@@ -1603,3 +1603,36 @@ on ATL but too few to move CTL.
 Not fixed here because the fix is the dual-source bridge -- ingest writing an
 `activities` row with Garmin's own load rather than the bridge's -- which is its
 own task. Recorded so the step is not later mistaken for a training signal.
+
+## 2026-09-08 -- 54 rows carry kilojoules in `calories`, and stay that way
+
+Found by the export-mining pass, hours after the backfill landed. Garmin's
+`calories` field is KILOJOULES despite its name. The 2026-05-10 marathon stores
+14904, which read as kilocalories is 349 kcal/km -- about four times what a human
+costs. Divided by 4.184 it is 3562 kcal, 83.5 kcal/km, which is the ~1 kcal/kg/km
+an 85.5 kg runner actually burns, and the daily summary
+(`UDSFile`.`activeKilocalories`) independently gives 3737 for that day.
+
+The mapper is fixed and two tests hold it. The 54 rows already written are NOT.
+`activities` is append-only (REDLINES.md rule 2), and the correction is one
+UPDATE away only if the owner disables the trigger -- which is precisely the
+bypass that rule exists to make deliberate rather than casual.
+
+Not doing it, on the balance actually in front of us:
+
+- Nothing computes on `calories`. It is stored, mapped through `store.ts`, and
+  read by no view, no guardrail and no load calculation.
+- The truth is not lost. `raw` holds the upstream record verbatim, so the correct
+  figure is one `raw->>'calories'` away for anything that ever needs it.
+- The cost of the bypass is not the UPDATE, it is the precedent. A rule that has
+  been suspended once for a genuinely harmless field is a rule with a procedure
+  for suspending it.
+
+So the column holds two units: kilocalories in the three rows the intervals.icu
+bridge wrote, kilojoules in the 54 from the 2026-09-08 backfill. Anything that
+starts reading `calories` must either use `raw` or filter on `source`, and this
+entry is the reason it will know to.
+
+Revisit if a feature ever needs the field: at that point re-deriving all 57 rows
+from `raw` into a new correctly-named column is a migration, not a bypass, and is
+the right shape of fix.

@@ -74,6 +74,11 @@ rows), and `package.json` (`db:backfill`). New: `src/lib/garmin-export.ts`,
 - [x] `load.test.ts` and `daily-pass.test.ts` rewritten to the new contract
 - [x] `docs/decisions.md` entry for the seed unit error, and a second for the two foreign-basis days
 - [x] `docs/ci-gates.md` row, proven by restoring the old seed (1 test red on values alone, 2 with `asOf`)
+- [x] `calories` is kilojoules -- mapper fixed, 2 tests, mutation caught; the 54
+      rows already written keep kJ, recorded in docs/decisions.md
+- [x] checked all 56 activities for distance overrides: exactly one
+      (2026-09-05 treadmill, 10.00 km stored against 7.49 km measured), and the
+      dedupe had already skipped it, so the backfill wrote no wrong distances
 
 ## Commits
 
