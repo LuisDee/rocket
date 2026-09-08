@@ -10,13 +10,22 @@
  * recommendation to abandon the goal race on 2026-09-06. `coverage` is not
  * decoration: it is how a reader tells a 42-day CTL from a 9-day one.
  *
- * **It is WARM-STARTED** from Garmin's own measured chronic/acute pair
- * (`LOAD.seed`). An exponential average initialised at zero does not converge
- * for one time constant; it ramps upward as a pure artefact of its window
- * filling, so a block being established reads as a block collapsing. Seeding
- * inherits Garmin's model, in Garmin's units, which is the right trade while
- * Garmin holds the history and we do not -- and the borrowing is stated in
- * `warmingUp` and `caveat` rather than hidden (REDLINES.md rule 4).
+ * **It is COLD-STARTED**, since 2026-09-08, from `LOAD.seed` at zero on the day
+ * before the earliest activity we hold. An exponential average initialised at
+ * zero does not converge for one time constant -- it ramps upward as an
+ * artefact of its window filling, so a block being established reads as a block
+ * collapsing -- and until the bulk-export backfill there was no history to
+ * outrun that, so the series borrowed Garmin's own chronic/acute pair instead.
+ *
+ * That borrowing was a UNIT ERROR, not merely an approximation: Garmin's pair
+ * accumulates about a week where this series runs on daily load, so it seeded
+ * roughly sevenfold high (see `LOAD.seed` for the measurement). With 165 days
+ * backfilled the initial zero is under 2 % of its weight by the first day
+ * anyone reads, so the artefact is gone and nothing has to be borrowed.
+ *
+ * `warmingUp` and `caveat` still exist and now mean what they say: a short
+ * series really is under-informed, rather than merely borrowed (REDLINES.md
+ * rule 4).
  *
  * **ATL, CTL and TSB are trend displays. Nothing is gated on them.** The 7 and
  * 42 day constants were never fitted against outcome data (Hellard 2006), and
@@ -174,9 +183,9 @@ export function rollingLoad(
     seed: { ctl: seed.ctl, atl: seed.atl, asOf: seed.asOf },
     warmingUp,
     caveat: warmingUp
-      ? `CTL has ${String(days)} of ${String(LOAD.ctlWarmUpDays)} days of our own history behind it; ` +
-        `the rest is Garmin's own chronic/acute pair (${String(seed.ctl)}/${String(seed.atl)}) as read on ${seed.asOf}. ` +
-        `Read it as a trend, not as a verdict.`
+      ? `CTL has ${String(days)} of ${String(LOAD.ctlWarmUpDays)} days of history behind it, counting from ${seed.asOf}. ` +
+        `Below one time constant the average is still climbing from its ${String(seed.ctl)} starting point as its window fills, ` +
+        `so a block being established reads low. Read it as a trend, not as a verdict.`
       : null,
   };
 }

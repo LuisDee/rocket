@@ -552,39 +552,56 @@ export const LOAD = {
   ctlWarmUpDays: 42,
 
   /**
-   * WARM START. Garmin's own measured chronic/acute pair, read off the watch on
-   * 2026-09-06, used as the initial condition of our EWMA rather than starting
-   * it at zero.
+   * COLD START, since 2026-09-08. Zero on the day before the first activity we
+   * hold, with the EWMA run forward over the whole real series.
    *
-   * Why this is not a cosmetic convenience. A 42-day exponential average
-   * initialised at zero does not converge for six weeks: it ramps upward as a
-   * pure artefact of the window filling, so TSB (CTL - ATL) reads deeply
-   * negative for the whole establishment phase of a block and every trend line
-   * points the wrong way. Seeding removes the artefact, at the cost of
-   * inheriting whatever Garmin's model believes -- which is the correct trade
-   * here, because Garmin has the history and we do not.
+   * ## What this replaced, and why it was wrong
    *
-   * The units are GARMIN TRAINING LOAD, not our stress score, and the two are
-   * not the same scale. That is deliberate and is the reason
-   * `activity_training_load` is the preferred per-day input: seeding a series
-   * in one unit and continuing it in another would produce a discontinuity
-   * exactly at the seed date. Where a day has no Garmin load, the RPE floor
-   * stands in and the mixture is stated in the coverage the computation
-   * returns.
+   * Until 2026-09-08 this was a WARM START from Garmin's own measured pair --
+   * `dailyTrainingLoadChronic` 287 and `dailyTrainingLoadAcute` 296, read off
+   * the watch. The reasoning was sound (a 42-day average initialised at zero
+   * ramps for six weeks as an artefact of its window filling, so a block being
+   * established reads as a block collapsing) but the numbers were in the wrong
+   * unit, and the old comment here talked itself past the very trap it named.
    *
-   * PROVISIONAL: settled by the bulk export backfill
-   * (PLAN-2026-001-m1-core-loop.md:472 names this pair as the cut line if the
-   * export has not arrived by 2026-09-14). Once a real 42-day series exists,
-   * recompute from it and delete the seed.
+   * Garmin's acute and chronic figures ACCUMULATE ROUGHLY A WEEK. Our EWMA runs
+   * on DAILY load. Measured against the 2026-09-08 bulk export, over the 269
+   * days where both series exist, Garmin's acute is a median 7.2x our ATL and
+   * its chronic a median 8.9x our CTL. So the warm start was not seeding the
+   * series in Garmin's model -- it was seeding it about sevenfold too high.
+   * Run on 2026-09-08 it produced CTL 273.7, ATL 222.4, TSB +51.2 against a
+   * true CTL 52.2, ATL 25.9, TSB +26.4.
+   *
+   * The damage was ahead of us rather than behind. The seeded figure decays
+   * toward the real one only as fast as the EWMA forgets, so once daily-scale
+   * loads started arriving, CTL would have fallen from 274 toward 50 across the
+   * whole 2026-09-14 build block -- displaying a collapse in fitness during the
+   * six weeks of the hardest training this athlete has ever done. A trend line
+   * that says "detraining" while the athlete adds volume is worse than no trend
+   * line, because it invites exactly the wrong correction.
+   *
+   * ## Why zero is now safe
+   *
+   * The artefact the warm start existed to suppress needs a short series to
+   * bite. `src/db/backfill-garmin.mts` loaded the Garmin GDPR export on
+   * 2026-09-08: 54 activities back to 2026-03-28, which is 165 days, or 3.9 CTL
+   * time constants. The initial zero has decayed to under 2 % of its weight by
+   * the first day anyone looks at, so it no longer moves the number.
+   *
+   * If the series is ever truncated again, `warmingUp` and `caveat` are what
+   * say so -- and they now do it honestly, because with a zero seed a short
+   * series really is under-informed rather than merely borrowed.
    */
   seed: {
-    /** Garmin `dailyTrainingLoadChronic`. */
-    ctl: 287,
-    /** Garmin `dailyTrainingLoadAcute`. */
-    atl: 296,
-    /** The day the pair was read. The EWMA starts from the day AFTER this. */
-    asOf: '2026-09-06',
-    source: 'Garmin dailyTrainingLoadChronic/dailyTrainingLoadAcute, Fenix 8',
+    ctl: 0,
+    atl: 0,
+    /**
+     * The day BEFORE the earliest activity in the export (2026-03-28), because
+     * `rollingLoad` starts the recursion on the day after `asOf`.
+     */
+    asOf: '2026-03-27',
+    source:
+      'cold start; history from the Garmin GDPR export backfilled 2026-09-08',
   },
 } as const;
 

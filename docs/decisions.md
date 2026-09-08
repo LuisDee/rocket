@@ -1542,3 +1542,64 @@ deletion cannot take it.
 **Status:** ACTIVE, superseding the 2026-09-07 "Strava uploads are prohibited"
 entry. The prohibition entry's legal analysis remains correct and is not
 retracted -- only the decision it drove.
+
+## 2026-09-08 -- the warm-start seed was a unit error, and is now a cold start
+
+`LOAD.seed` warm-started the CTL/ATL recursion from Garmin's own
+`dailyTrainingLoadChronic` (287) and `dailyTrainingLoadAcute` (296). Those two
+figures ACCUMULATE ROUGHLY A WEEK. Our EWMA runs on daily load. Seeding one with
+the other was not an approximation, it was a scale error of about sevenfold.
+
+Measured against the 2026-09-08 GDPR export, across the 269 days where both
+series exist: Garmin's acute is a median 7.21x our ATL, its chronic a median
+8.89x our CTL. Run through `rollingLoad` on 2026-09-08 the seed produced
+CTL 273.7 / ATL 222.4 / TSB +51.2, against a true CTL 52.2 / ATL 27.5 / TSB
++24.7 computed from 165 days of real history.
+
+What makes this worth an entry rather than a bug fix is WHERE the damage sat. It
+was ahead of us. The seeded level decays toward the truth only as fast as the
+average forgets, so once daily-scale loads began arriving CTL would have fallen
+from 274 toward 50 across the 2026-09-14 build block -- rendering a collapse in
+fitness during the six hardest training weeks this athlete has attempted. A
+trend line reading "detraining" while volume climbs invites exactly the wrong
+correction, and it would have been believed, because the number had a coverage
+window attached and looked well-founded.
+
+The old comment on `LOAD.seed` named the trap precisely -- "seeding a series in
+one unit and continuing it in another would produce a discontinuity exactly at
+the seed date" -- and then did it anyway, because `activity_training_load` and
+`dailyTrainingLoadChronic` both read as "Garmin training load". Identifying a
+hazard in prose is not the same as checking whether you are standing in it.
+
+Fixed by cold-starting from zero on 2026-03-27, the day before the earliest
+activity in the export. Safe now only because `src/db/backfill-garmin.mts`
+loaded 165 days of history: at 3.9 CTL time constants the initial zero carries
+under 2 % of its weight. `warmingUp` and `caveat` survive and now mean what they
+say, and their wording changed -- the old caveat cited "Garmin's own
+chronic/acute pair", which would have been a caveat that lied.
+
+Rejected: dividing the seed by seven. The two ratios differ by 24 %, which is
+evidence they are not one rescaling, and Garmin documents neither window. With
+real history the seed is unnecessary rather than imprecise.
+
+## 2026-09-08 -- two days of the load series carry a foreign basis, knowingly
+
+`activities` is append-only (REDLINES.md rule 2), so the three rows the
+intervals.icu bridge wrote before the backfill cannot be replaced. Two of them
+are 2026-09-05's hike and treadmill run, which the export also describes.
+
+The backfill dedupes on `start_time_local` and skips them, so nothing is
+double-counted. But intervals.icu computes its own load: it scores that day 78
+where Garmin's device figure is 144.3, and scores the hike HIGHER than Garmin
+(23 against 15.9) while scoring the run at less than half (55 against 128.5).
+Not one factor, a different model.
+
+So 2026-09-05 and 2026-09-07 sit in the series on intervals.icu's scale and the
+other 163 days on Garmin's, and `dailyStress` labels all of them `garmin`
+because `basis` only distinguishes a device figure from the RPE floor. The
+mislabelling is the part worth fixing; the two days are recent enough to weigh
+on ATL but too few to move CTL.
+
+Not fixed here because the fix is the dual-source bridge -- ingest writing an
+`activities` row with Garmin's own load rather than the bridge's -- which is its
+own task. Recorded so the step is not later mistaken for a training signal.

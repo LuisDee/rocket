@@ -2,10 +2,14 @@
  * The load engine. Two things are being defended here, and neither is the
  * arithmetic of an exponential average.
  *
- * 1. The WARM START. Without it a 42-day average starting at zero climbs for
- *    six weeks purely because its window is filling, so a block being
- *    established reads as a block collapsing. The regression test for that is
- *    the "no history" case: CTL must equal the seed, not drift toward zero.
+ * 1. The COLD START, and that it is only safe because a long series now backs
+ *    it. A 42-day average starting at zero climbs for six weeks purely because
+ *    its window is filling, so a block being established reads as a block
+ *    collapsing. Until 2026-09-08 that was suppressed by seeding from Garmin's
+ *    chronic/acute pair -- which was seven times too large, because Garmin
+ *    accumulates a week where this runs on daily load. The defence is now the
+ *    165-day backfill plus `warmingUp`, which says outright when the window is
+ *    too short to trust.
  * 2. The COVERAGE WINDOW travelling with the number (REDLINES.md rule 7). A
  *    trailing figure without the span it covers is wrong without looking wrong.
  */
@@ -82,12 +86,39 @@ describe('rollingLoad', () => {
     expect(state.coverage.days).toBe(0);
   });
 
-  it('decays from the seed rather than climbing from zero on a rest week', () => {
+  it('decays toward zero on a rest week, ATL faster than CTL', () => {
+    // Sixty days of steady training, then seven days off. This is the shape the
+    // real series has after the 2026-08-24 holiday, and the property that makes
+    // TSB readable: both averages fall, the 7-day one falls faster, so freshness
+    // rises. A sign error or a swapped time constant inverts it.
+    const trained = Array.from({ length: 60 }, (_, i) => ({
+      date: shiftIso(SEED.asOf, i + 1),
+      load: 150,
+      basis: 'garmin' as const,
+    }));
+    const lastTrainingDay = shiftIso(SEED.asOf, 60);
+    const before = rollingLoad(trained, lastTrainingDay);
+    const after = rollingLoad(trained, shiftIso(lastTrainingDay, 7));
+
+    expect(after.ctl).toBeLessThan(before.ctl);
+    expect(after.atl).toBeLessThan(before.atl);
+    // ATL sheds far more of itself in a week than CTL does.
+    expect(before.atl - after.atl).toBeGreaterThan(before.ctl - after.ctl);
+    expect(after.tsb).toBeGreaterThan(before.tsb);
+    expect(after.tsb).toBeGreaterThan(0);
+  });
+
+  it('starts from zero, so an empty series never invents a fitness level', () => {
+    // The regression for the unit error fixed on 2026-09-08: the seed used to
+    // be Garmin's `dailyTrainingLoadChronic` (287), a WEEKLY accumulation fed
+    // into a DAILY average, which reported CTL 273.7 against a true 52.2. A
+    // non-zero seed here would mean someone had reintroduced a borrowed level.
+    expect(SEED.ctl).toBe(0);
+    expect(SEED.atl).toBe(0);
     const state = rollingLoad([], shiftIso(SEED.asOf, 7));
-    // The failure this exists to catch: an unseeded EWMA would be RISING here.
-    expect(state.ctl).toBeLessThan(SEED.ctl);
-    expect(state.ctl).toBeGreaterThan(SEED.ctl * 0.8);
-    expect(state.atl).toBeLessThan(state.ctl);
+    expect(state.ctl).toBe(0);
+    expect(state.atl).toBe(0);
+    expect(state.tsb).toBe(0);
   });
 
   it('drives ATL harder than CTL for the same load, which is what TSB reads', () => {
@@ -135,8 +166,11 @@ describe('rollingLoad', () => {
     // REDLINES.md rule 4: the caveat has to name the days it has and where the
     // rest came from, in the payload, where a caller cannot silently drop it.
     expect(state.caveat).toContain(String(LOAD.ctlWarmUpDays));
-    expect(state.caveat).toContain(String(SEED.ctl));
     expect(state.caveat).toContain(SEED.asOf);
+    // It must describe a window that is too short, NOT a borrowed level. The
+    // old wording named "Garmin's own chronic/acute pair", which stopped being
+    // true when the seed went to zero and would have been a caveat that lied.
+    expect(state.caveat).not.toContain('Garmin');
   });
 
   it('stops caveating once a full time constant of our own history exists', () => {

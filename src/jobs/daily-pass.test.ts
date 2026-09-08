@@ -138,16 +138,21 @@ describe('the daily pass, when everything works', () => {
     expect(store.rows.ingested).toHaveLength(1);
   });
 
-  it('recomputes load from the seed, and returns the window it covers', async () => {
+  it('recomputes load over the whole backfilled window, uncaveated', async () => {
     const result = await run(store, fakeBridge());
 
     expect(result.load).not.toBeNull();
     expect(result.load?.seed.ctl).toBe(LOAD.seed.ctl);
     expect(result.load?.coverage.to).toBe(TODAY);
     expect(result.load?.coverage.from).toBe(shiftIso(LOAD.seed.asOf, 1));
-    // REDLINES.md rule 4: thin history states its own insufficiency.
-    expect(result.load?.warmingUp).toBe(true);
-    expect(result.load?.caveat).not.toBeNull();
+    // Before the 2026-09-08 backfill this asserted the opposite: the window was
+    // two days long and REDLINES.md rule 4 required it to say so. It now spans
+    // from 2026-03-27, well past one CTL time constant, so a caveat here would
+    // be the system apologising for history it actually has. `load.test.ts`
+    // keeps the short-window case, which is where rule 4 is still exercised.
+    expect(result.load?.coverage.days).toBeGreaterThan(LOAD.ctlWarmUpDays);
+    expect(result.load?.warmingUp).toBe(false);
+    expect(result.load?.caveat).toBeNull();
   });
 
   it('reports every one of the five replan triggers, including the invisible two', async () => {

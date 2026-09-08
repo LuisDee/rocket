@@ -301,10 +301,13 @@ describe('upload metadata carries no branding', () => {
     const seen: FormData[] = [];
     const fetchImpl = (async (_url: string, init: RequestInit) => {
       seen.push(init.body as FormData);
-      return new Response(JSON.stringify({ id: 1, status: 'ok', activity_id: 99 }), {
-        status: 201,
-        headers: { 'content-type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ id: 1, status: 'ok', activity_id: 99 }),
+        {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        },
+      );
     }) as unknown as typeof fetch;
 
     await uploadFit(Buffer.from('fit'), 'run-2026-09-07-7.65km.fit', {
@@ -316,7 +319,9 @@ describe('upload metadata carries no branding', () => {
     const form = seen[0]!;
     expect(form.get('description')).toBeNull();
     expect(form.get('name')).toBeNull();
-    expect(String(form.get('external_id'))).not.toMatch(/rocket|crop|pause|ai/i);
+    expect(String(form.get('external_id'))).not.toMatch(
+      /rocket|crop|pause|ai/i,
+    );
     expect(String(form.get('external_id'))).toBe('24276183028');
   });
 });
