@@ -77,4 +77,4 @@ rows), and `package.json` (`db:backfill`). New: `src/lib/garmin-export.ts`,
 
 ## Commits
 
-(populated as work lands)
+- `db32c7d` feat(load): backfill the Garmin history and cold-start CTL, fixing a 7x seed error
