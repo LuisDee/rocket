@@ -72,8 +72,8 @@ rows), and `package.json` (`db:backfill`). New: `src/lib/garmin-export.ts`,
 - [x] 54 of 56 activities backfilled; 2 correctly skipped as bridge duplicates
 - [x] `LOAD.seed` cold-started; `load.ts` contract and caveat rewritten
 - [x] `load.test.ts` and `daily-pass.test.ts` rewritten to the new contract
-- [ ] `docs/decisions.md` entry for the seed unit error
-- [ ] `docs/ci-gates.md` row for the append-only backfill path
+- [x] `docs/decisions.md` entry for the seed unit error, and a second for the two foreign-basis days
+- [x] `docs/ci-gates.md` row, proven by restoring the old seed (1 test red on values alone, 2 with `asOf`)
 
 ## Commits
 
