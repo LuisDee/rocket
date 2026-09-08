@@ -83,3 +83,4 @@ rows), and `package.json` (`db:backfill`). New: `src/lib/garmin-export.ts`,
 ## Commits
 
 - `db32c7d` feat(load): backfill the Garmin history and cold-start CTL, fixing a 7x seed error
+- `2d34007` fix(garmin): calories is kilojoules, and one treadmill distance is an override
