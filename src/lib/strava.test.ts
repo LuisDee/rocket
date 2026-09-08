@@ -291,3 +291,32 @@ describe('token refresh', () => {
     }
   });
 });
+
+describe('upload metadata carries no branding', () => {
+  it('sends no description and an external_id naming only the Garmin activity', async () => {
+    // Luis ratified uploading despite API Policy 5.3 on 2026-09-07, then asked
+    // for the metadata kept bland: "ratifying the risk doesn't mean I WANT them
+    // to ban me". A description reading "pause-cropped by rocket" would hand
+    // Strava the exact thing 5.3 prohibits, in writing, attached to the upload.
+    const seen: FormData[] = [];
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      seen.push(init.body as FormData);
+      return new Response(JSON.stringify({ id: 1, status: 'ok', activity_id: 99 }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    await uploadFit(Buffer.from('fit'), 'run-2026-09-07-7.65km.fit', {
+      externalId: '24276183028',
+      fetchImpl,
+      tokenImpl: async () => 'tok',
+    });
+
+    const form = seen[0]!;
+    expect(form.get('description')).toBeNull();
+    expect(form.get('name')).toBeNull();
+    expect(String(form.get('external_id'))).not.toMatch(/rocket|crop|pause|ai/i);
+    expect(String(form.get('external_id'))).toBe('24276183028');
+  });
+});

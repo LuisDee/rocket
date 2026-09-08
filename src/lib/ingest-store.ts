@@ -122,7 +122,12 @@ export async function shipToStrava(
     const stravaActivityId = await upload(
       row.croppedFit,
       row.croppedFilename ?? `${garminActivityId}.fit`,
-      { externalId: `rocket-${garminActivityId}` },
+      // Deliberately bare: no description, and an external_id that names only
+      // the Garmin activity. Luis ratified uploading despite API Policy 5.3 on
+      // 2026-09-07, but ratifying the risk is not the same as advertising it --
+      // a description reading "pause-cropped by rocket" tells Strava exactly
+      // what the policy prohibits. The id is still unique enough to dedupe on.
+      { externalId: garminActivityId },
     );
     await db
       .update(ingestedActivities)
