@@ -92,3 +92,4 @@ from the data alone.
 
 - `db32c7d` feat(load): backfill the Garmin history and cold-start CTL, fixing a 7x seed error
 - `2d34007` fix(garmin): calories is kilojoules, and one treadmill distance is an override
+- `73ee784` docs(config): record Luis's three calls -- 100 km stands, half is raced, May gap was chosen
