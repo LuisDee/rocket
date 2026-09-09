@@ -13,15 +13,15 @@ type Db = ReturnType<typeof getDb>;
 /**
  * Completed runs over an inclusive span.
  *
- * Reads `activities`, the training log, which is the source of truth and is
- * populated by the intervals.icu daily pass. That sync has not run yet -- Garmin
- * was connected to the bridge on 2026-09-07 and the backfill is outstanding --
- * so the table is currently empty while five real runs sit in
- * `ingested_activities`, pulled straight from Garmin by the crop pipeline.
+ * Reads `activities`, the training log and the source of truth. It holds 57 rows
+ * as of 2026-09-08: 54 backfilled from the Garmin GDPR export (2026-03-28
+ * onward, see `src/db/backfill-garmin.mts`) and 3 written by the intervals.icu
+ * daily pass.
  *
- * Until the sync lands, the ingest queue is supplemented in so the screen shows
- * runs that demonstrably happened rather than zeroes. Rows are keyed by date so
- * a run present in both is counted once, and `activities` wins.
+ * The ingest queue is still supplemented in, because the crop pipeline can see a
+ * run before either sync does -- it pulls straight from Garmin within minutes.
+ * Rows are keyed by date so a run in both is counted once, and `activities`
+ * wins.
  *
  * ponytail: two sources, and it should be one. The proper fix is the ingest
  * writing an `activities` row as well as its queue row; this bridge should be
@@ -68,14 +68,77 @@ export async function completedRuns(
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** The newest runs for the "recent" list, newest first. */
+export type RecentRun = {
+  date: string;
+  name: string;
+  km: number;
+  seconds: number | null;
+};
+
+/**
+ * The newest runs for the "recent" list, newest first.
+ *
+ * Reads the training log FIRST and the crop queue second. It used to read only
+ * the queue, which meant the screen showed the five runs the Mac poller happened
+ * to have cropped and nothing else -- so after 54 activities were backfilled on
+ * 2026-09-08 the list still showed five, and the athlete reasonably asked why his
+ * runs were missing.
+ *
+ * The queue is still unioned in, because it sees a run within minutes of the
+ * watch syncing while the daily pass runs once a day. A run in both appears once:
+ * matched on the start instant, which is the same key the backfill dedupes on and
+ * is reliable across sources because two runs cannot begin in the same second.
+ */
 export async function recentRuns(
   limit: number,
   db: Db = getDb(),
-): Promise<
-  { date: string; name: string; km: number; seconds: number | null }[]
-> {
-  const rows = await db
+): Promise<RecentRun[]> {
+  const logged = await db
+    .select({
+      localDate: activities.localDate,
+      name: activities.name,
+      distanceM: activities.distanceM,
+      durationS: activities.durationS,
+      movingDurationS: activities.movingDurationS,
+    })
+    .from(activities)
+    .orderBy(desc(activities.startTimeLocal))
+    .limit(limit);
+
+  // Matched on DATE AND DISTANCE, not on a timestamp.
+  //
+  // The three timestamp columns involved follow three different conventions and
+  // no two agree. For a run that began 07:44 local on 2026-08-22:
+  // `activities.start_time_local` holds 08:44 (a `timestamp` the driver rendered
+  // in BST when the backfill wrote it), `activities.start_time_gmt` holds the
+  // correct 06:44 UTC, and `ingested_activities.started_at` holds 07:44 tagged
+  // `+00` -- local wall clock mislabelled as UTC. Any timestamp comparison
+  // matches on at most one pair, and the screen showed every recent run twice.
+  //
+  // Date and distance are the two things all three agree on. 150 m of slack
+  // absorbs the crop pipeline trimming a few metres; it is far below the gap
+  // between any two runs an athlete does on one day.
+  const seen = logged.flatMap((r) =>
+    r.distanceM === null ? [] : [{ date: r.localDate, km: r.distanceM / 1000 }],
+  );
+  const alreadyLogged = (date: string, km: number): boolean =>
+    seen.some((s) => s.date === date && Math.abs(s.km - km) < 0.15);
+
+  const runs: RecentRun[] = logged.flatMap((row) => {
+    if (row.distanceM === null) return [];
+    return [
+      {
+        date: row.localDate,
+        name: row.name ?? 'Run',
+        km: Math.round((row.distanceM / 1000) * 100) / 100,
+        // Moving time is what a pace should be read against; total duration
+        // includes standing still, and two of these runs carry 17 minutes of it.
+        seconds: row.movingDurationS ?? row.durationS,
+      },
+    ];
+  });
+
+  const queued = await db
     .select({
       startedAt: ingestedActivities.startedAt,
       name: ingestedActivities.activityName,
@@ -85,19 +148,20 @@ export async function recentRuns(
     .orderBy(desc(ingestedActivities.startedAt))
     .limit(limit);
 
-  return rows.flatMap((row) => {
+  for (const row of queued) {
     const date = isoDate(row.startedAt);
     const km = distanceFromCropSummary(row.cropSummary);
-    if (date === null || km === null) return [];
-    return [
-      {
-        date,
-        name: row.name ?? 'Run',
-        km,
-        seconds: movingSecondsFromCropSummary(row.cropSummary),
-      },
-    ];
-  });
+    if (date === null || km === null) continue;
+    if (alreadyLogged(date, km)) continue;
+    runs.push({
+      date,
+      name: row.name ?? 'Run',
+      km,
+      seconds: movingSecondsFromCropSummary(row.cropSummary),
+    });
+  }
+
+  return runs.sort((a, b) => b.date.localeCompare(a.date)).slice(0, limit);
 }
 
 /** How many runs are sitting in the crop queue awaiting a decision. */

@@ -1674,3 +1674,35 @@ export has no note field, so the series shows his highest week ever followed by
 three weeks of silence and cannot distinguish a decision from an injury -- and the
 wrong reading inverts the meaning of the best evidence in the record. Recorded in
 `MEASURED_BASE.peakWeekFollowedByChosenRest`.
+
+## 2026-09-09 -- `start_time_local` is an hour late in the 54 backfilled rows
+
+The second defect from the same import, found while fixing the dashboard. The
+backfill handed node-postgres a JS `Date` for `activities.start_time_local`,
+which is `timestamp without time zone`. The driver renders a Date into a naive
+column using the PROCESS timezone, so a run that began 07:44 local on 2026-08-22
+was stored as 08:44 -- the BST offset applied to a value that was already local.
+
+`local_date` was never affected: the mapper derives it from the Date's UTC fields
+directly, so every rollup, every weekly total and the whole CTL series are
+correct. Nor did any run cross midnight -- the latest start in the corpus is
+22:38, so no date rolled over. The damage is confined to the wall-clock column.
+
+The mapper now formats a naive string, which Postgres parses literally. The 54
+existing rows keep the hour, for the reason the kilojoule entry above gives: the
+table is append-only, nothing computes on the column, and `raw` holds the true
+value.
+
+What it did break, before it was fixed, was the dashboard. `recentRuns` deduped
+the training log against the crop queue on a timestamp, and there are now THREE
+conventions in play that no two of which agree:
+
+    activities.start_time_local     08:44   naive, one hour ahead
+    activities.start_time_gmt       06:44   correct UTC instant
+    ingested_activities.started_at  07:44   local wall clock tagged +00
+
+Every recent run appeared twice on screen. The dedupe now matches on date and
+distance within 150 m, which is the one thing all three sources agree on, and
+`src/lib/dashboard.integration.test.ts` holds it against three deliberate
+breakages -- including a date-only match, whose first test was vacuous because it
+used two logged runs where the dedupe only ever filters queue rows.

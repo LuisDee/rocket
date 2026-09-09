@@ -88,6 +88,13 @@ May gap was chosen rest. All three are now in `config/training.ts` rather than i
 a chat log, because each one inverts an inference a reader would otherwise make
 from the data alone.
 
+## Follow-up landed 2026-09-09 (part two)
+
+The dashboard showed five runs after 54 were backfilled, because `recentRuns`
+read only the crop queue. Fixed, and fixing it surfaced a second import defect:
+`start_time_local` is an hour late in every backfilled row. Both recorded in
+`docs/decisions.md`; the mapper no longer does it.
+
 ## Commits
 
 - `db32c7d` feat(load): backfill the Garmin history and cold-start CTL, fixing a 7x seed error

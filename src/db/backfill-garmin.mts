@@ -97,6 +97,18 @@ const COLUMNS = [
   'raw',
 ] as const;
 
+/**
+ * `YYYY-MM-DD HH:MM:SS` from a Date whose UTC fields ARE the local wall clock.
+ *
+ * The export gives `startTimeLocal` as epoch milliseconds already shifted to
+ * local time, so the Date's UTC accessors read back the wall clock directly.
+ * Using the local accessors here would apply the shift a second time.
+ */
+function naiveTimestamp(at: Date | null): string | null {
+  if (at === null) return null;
+  return at.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 function values(row: BackfillRow): unknown[] {
   return [
     row.id,
@@ -104,7 +116,14 @@ function values(row: BackfillRow): unknown[] {
     row.garminActivityId,
     row.name,
     row.activityType,
-    row.startTimeLocal,
+    // Formatted as a naive wall-clock STRING, never handed over as a Date.
+    // `start_time_local` is `timestamp without time zone`, and node-postgres
+    // renders a Date into it using the process timezone -- so a run that began
+    // 07:44 local was stored as 08:44 during BST. Postgres parses this string
+    // literally, with no conversion. (The 54 rows written on 2026-09-08 carry
+    // that hour; see docs/decisions.md. `local_date` was never affected, which
+    // is why no rollup was wrong.)
+    naiveTimestamp(row.startTimeLocal),
     row.startTimeGmt,
     row.timeZoneId,
     row.localDate,
