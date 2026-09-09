@@ -80,6 +80,14 @@ rows), and `package.json` (`db:backfill`). New: `src/lib/garmin-export.ts`,
       (2026-09-05 treadmill, 10.00 km stored against 7.49 km measured), and the
       dedupe had already skipped it, so the backfill wrote no wrong distances
 
+## Follow-up landed 2026-09-09
+
+Luis's answers to the three questions the export could not settle: the 100 km
+peak is ratified with a reversal condition, the half is raced flat out, and the
+May gap was chosen rest. All three are now in `config/training.ts` rather than in
+a chat log, because each one inverts an inference a reader would otherwise make
+from the data alone.
+
 ## Commits
 
 - `db32c7d` feat(load): backfill the Garmin history and cold-start CTL, fixing a 7x seed error

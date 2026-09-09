@@ -1636,3 +1636,41 @@ entry is the reason it will know to.
 Revisit if a feature ever needs the field: at that point re-deriving all 57 rows
 from `raw` into a new correctly-named column is a migration, not a bypass, and is
 the right shape of fix.
+
+## 2026-09-09 -- Luis ratifies the 100 km peak, and answers the two open questions
+
+Three decisions, all his, all recorded because the next reader will otherwise
+re-derive the objection and re-litigate it.
+
+**The 100 km peak stands.** Put to him with the full case against: highest
+recorded week 57.1 km (so the peak is 1.75x it and week 2 already exceeds it);
+the four complete weeks to 2026-08-31 averaging 19.2 km; Garmin's own
+RunningTolerance ceiling at ~34 km/week and falling; a simulated week-3
+acute:chronic ratio of 2.04. He was offered a 50 km ladder that reaches race day
+at CTL 79 -- above his all-time peak -- without a week above his record, and
+declined it.
+
+His grounds are on the record and are not merely preference: he stipulates 60 km
+weeks are comfortable and that some history never reached Garmin, and the 23-day
+gap after his peak week was chosen rest. Both are things the data cannot see and
+he can. The recorded series is a floor on his capacity.
+
+What makes this a decision rather than a wager is that it now carries a reversal
+condition in `BLOCK_WEEKS[4].note` -- resting HR elevated 3 days running, two LOW
+readiness days in a week, soreness at 3+, or a week missing target by 15% -- to
+be judged at the end of week 2. Without that it would be an override with no exit,
+which is the shape of decision this project exists to prevent.
+
+**The Battersea Half is raced flat out.** Its `role: 'tune-up'` describes its
+place in the block, not its intensity. That is roughly 480 load points on
+2026-09-12 with week 2 opening on the 14th, and Luis confirmed the block starts
+straight after anyway -- so the recovery has to come out of week 2's opening days.
+Lincoln on 2026-10-04 is the race that must not be run this way; week 4's 100 km
+depends on it being a marathon-pace rehearsal, and the note there already carries
+the reversal.
+
+**The 23-day May gap was chosen.** Post-marathon rest he elected to take. The
+export has no note field, so the series shows his highest week ever followed by
+three weeks of silence and cannot distinguish a decision from an injury -- and the
+wrong reading inverts the meaning of the best evidence in the record. Recorded in
+`MEASURED_BASE.peakWeekFollowedByChosenRest`.

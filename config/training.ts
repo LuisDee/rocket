@@ -64,7 +64,12 @@ export const RACES = [
     distanceKm: 21.1,
     role: 'tune-up',
     droppable: false,
-    note: 'Same park as the goal marathon, so it doubles as a course rehearsal. Its result settles PACE_ESTIMATES.',
+    note:
+      'Same park as the goal marathon, so it doubles as a course rehearsal. Its result settles PACE_ESTIMATES. ' +
+      'RACED FLAT OUT -- Luis confirmed 2026-09-09. "tune-up" is its ROLE in the block, not its intensity: it is a ' +
+      'hard 21.1 km costing roughly 480 load points, and week 2 opens two days later. He also confirmed the block ' +
+      'starts straight after regardless, so the recovery comes out of week 2 opening days rather than out of the ' +
+      'calendar. Lincoln on 2026-10-04 is the race that must NOT be run this way -- see week 4.',
   },
   {
     date: '2026-10-03',
@@ -991,7 +996,23 @@ export const BLOCK_WEEKS = [
       'CONDITION: it requires Lincoln run at marathon pace, not raced flat out. That was the role the original ' +
       'spec gave Lincoln ("rehearsal -- marathon pace, confirms goal pace"), so this restores intent rather than ' +
       'imposing a new constraint. REVERSIBLE: if Luis races it hard, this week loses its long session and the ' +
-      '100 km target should come down. Seven running days: 100 km over five would be 20 km a day.',
+      '100 km target should come down. Seven running days: 100 km over five would be 20 km a day. ' +
+      'RATIFIED AT 100 BY LUIS ON 2026-09-09, against the evidence and after it was put to him in full. ' +
+      'What he overrode: his highest recorded week is 57.1 km, so this is 1.75x it, and week 2 already exceeds it; ' +
+      'the four complete weeks to 2026-08-31 average 19.2 km, making week 2 a 3.1x jump; Garmin RunningTolerance ' +
+      'read 40,627 impact units on 2026-09-07, about 34 km/week at his measured 1,185 units/km, and it is FALLING ' +
+      '(46,551 on 08-23 to 40,627 on 09-06), so every week here is ABOVE_TOLERANCE by Garmin own rule from week ' +
+      'one; and simulating this ladder puts week 3 at an acute:chronic ratio of 2.04, the shape a week-three ' +
+      'breakdown has. The alternative offered and declined was a 50 km peak reaching race day at CTL 79 -- above ' +
+      'his all-time peak of 72.3 -- without a single week above his record. ' +
+      'His grounds, which are not nothing: he stipulates 60 km weeks are comfortable and that some history never ' +
+      'reached Garmin (MEASURED_BASE.stipulatedComfortableWeekKm), and the 23-day gap after his 57.1 km peak week ' +
+      'was rest he chose, not a breakdown (MEASURED_BASE.peakWeekFollowedByChosenRest). The recorded series is a ' +
+      'floor on his capacity, not a measure of it. ' +
+      'THE REVERSAL CONDITION, which is what makes this a decision rather than a wager: drop to the 50 km ladder ' +
+      'if ANY of these appear -- resting HR more than 5 bpm above its trailing 7-day mean for 3 consecutive days; ' +
+      'two LOW readiness days in one week; soreness at severity 3 or above; or week 2 or 3 missing target by more ' +
+      'than 15%. Decide on evidence at the end of week 2, not on enthusiasm at the start of it.',
   },
   {
     week: 5,
@@ -1103,6 +1124,23 @@ export const MEASURED_BASE = {
   longestRecordedRunKm: 42.7,
 
   /**
+   * The 23-day gap that follows, 2026-05-11 to 2026-06-02, was CHOSEN. Luis
+   * confirmed on 2026-09-09: post-marathon rest he elected to take, not a
+   * layoff forced on him.
+   *
+   * This is the most load-bearing fact under the whole aggressive ramp, and the
+   * export cannot supply it -- there is no note field, so the data shows a peak
+   * week followed by three weeks of silence and cannot tell a decision from an
+   * injury. Read as injury it would mean his highest week ever broke him, and
+   * the 100 km target would be indefensible. Read correctly it means 57.1 km
+   * with a marathon inside it was absorbed, and then deliberately put down.
+   *
+   * Recorded here rather than left in a chat log because the next reader will
+   * see the same silence and reach for the same wrong inference.
+   */
+  peakWeekFollowedByChosenRest: true,
+
+  /**
    * Luis states he has run 60 km weeks comfortably and that some history never
    * reached Garmin or Strava. He instructed that this be stipulated rather than
    * argued from the recorded data, and it is: the recorded series is a floor on
@@ -1115,6 +1153,11 @@ export const MEASURED_BASE = {
    * ours, and free. A ratio of 1.00 is balanced: neither detrained nor
    * overreached. Store ours alongside these and reconcile; disagreement is
    * exactly the signal calibration needs.
+   *
+   * DO NOT SEED `LOAD.seed` FROM THESE. They accumulate roughly a week; our
+   * CTL/ATL run on daily load, and the two differ by a factor of about seven.
+   * Doing it once already produced CTL 273.7 where the truth was 52.2 -- see
+   * docs/decisions.md, 2026-09-08. They are a comparison, not an input.
    */
   garmin: {
     acuteLoad: 296,
