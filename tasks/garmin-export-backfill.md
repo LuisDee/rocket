@@ -101,3 +101,4 @@ read only the crop queue. Fixed, and fixing it surfaced a second import defect:
 - `2d34007` fix(garmin): calories is kilojoules, and one treadmill distance is an override
 - `73ee784` docs(config): record Luis's three calls -- 100 km stands, half is raced, May gap was chosen
 - `37cf161` fix(dashboard): show every run once, from the training log rather than the crop queue
+- `52e6618` feat(paces): derive training paces from a race, and keep Garmin's threshold pace out
