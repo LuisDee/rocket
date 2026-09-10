@@ -1706,3 +1706,80 @@ distance within 150 m, which is the one thing all three sources agree on, and
 `src/lib/dashboard.integration.test.ts` holds it against three deliberate
 breakages -- including a date-only match, whose first test was vacuous because it
 used two logged runs where the dedupe only ever filters queue rows.
+
+## 2026-09-10 -- the session prescription layer, and what it rests on
+
+Luis asked what official sources the plan draws on, how we know it is any good,
+and how it is validated rather than invented. The honest answer, before the
+design: it drew on nothing. `PlannedSession` was `{ date, km, kind }` with `kind`
+one of easy/quality/long/rest/race/swim, and `quality` was a bare label. No pace,
+no session structure, no intensity prescription existed anywhere in the codebase.
+
+28 agents across two workflows researched it, half of them adversarial with the
+sole job of searching for each citation and marking it VERIFIED, NOT_FOUND or
+MISATTRIBUTED. What follows survived that.
+
+### The finding that mattered most is negative
+
+**Garmin's lactate-threshold PACE of 4:20.9/km is wrong, and prescribing from it
+would have hurt him.** It is 2 s/km SLOWER than his best 5.10 km race (4:19/km,
+2026-04-11) -- Garmin asserts his 22-minute race pace is sustainable for an hour.
+It refutes itself on his own file. Lu et al. 2025 (Front Physiol 16:1621996)
+measured the same failure across recreational runners: smartwatch LT pace
+overestimated, MAPE 25.78 %, p < 0.01.
+
+Its threshold HEART RATE of 177 is sound, from the same paper -- smartwatch LT
+heart rate was not significantly different from laboratory testing -- and is
+independently corroborated by his own file: he averaged 174 bpm for 106 minutes
+in the July half, and nobody averages above LT2 for 106 minutes.
+
+Hence the rule now encoded: TRUST DEVICE HEART-RATE ANCHORS, DISTRUST DEVICE PACE
+ANCHORS. His real threshold is 4:52/km from three converging derivations (Daniels
+VDOT 42.0 gives 4:54; Riegel to a 3600 s effort gives 4:46-4:53; the
+half-pace-minus-11 s convention gives 4:52). A weekly 30-minute "tempo" at 4:21
+is a 10 km race effort, and stacking that on a ramp to 100 km/week is the most
+plausible route to injuring him that this project has produced.
+
+### Three claims of ours did not survive checking
+
+1. **"Garmin over-predicts him by 1.118."** It does not reproduce. Normalised:
+   half 1:46:21 against a predicted 1:38:25 gives 1.081; marathon 3:52:59 against
+   3:36:12 gives 1.078. The real factor is **1.083**, from n = 2. The 5 km ratios
+   are unusable because his two 5 km efforts disagree by 25 s/km.
+2. **"It missed the May marathon by 27 minutes."** 19:42, and 16:47 once
+   normalised to 42.195 km.
+3. Both figures were repeated to Luis on 2026-09-08 before they were checked.
+
+### What nobody actually knows
+
+Festa et al. 2019 randomised 38 recreational runners with a mean VO2max of 53.2
+-- his is 53.0, the closest population match in the literature -- to polarised
+77/3/20 against threshold-heavy 40/50/10 for eight weeks, and found NO
+significant difference in speed at VO2max, running economy or 2 km performance.
+Two distributions about as far apart as can be constructed, same outcome.
+
+So the intensity-distribution choice is a risk decision, not a performance
+optimisation, and nothing in the app may call it optimal.
+
+Likewise: no trial has ever tested a 24 to 100 km/week ramp. The usual citation
+against it, Nielsen 2014, is NON-SIGNIFICANT (HR 1.59, 95 % CI 0.96-2.66,
+p = .07) on a subgroup of novice runners in a study whose primary outcome was
+null, and Buist's GRONORUN RCT (n = 532) found the 10 % rule prevented nothing
+(20.8 % against 20.3 %). The evidence is absent in both directions: he is not
+defying it, and it is not protecting him either.
+
+### The design, and why it is multipliers
+
+Every zone is a multiplier of one anchor race, so no session anywhere stores a
+pace -- REDLINES rule 1 by construction rather than by discipline -- and
+re-anchoring on Saturday's half is one field rather than forty sessions.
+
+`ATHLETE` holds only measured physiology. Where Garmin's threshold pace would sit
+there is a comment saying why it is absent, because the failure mode is somebody
+noticing the gap and helpfully filling it. `paces.test.ts` asserts the field does
+not exist.
+
+`thresholdVerdict()` closes the loop: the derived 4:52 is three formulas agreeing
+with each other and validated on nobody, so a work-interval mean above 180 bpm is
+read as the PACE being too fast rather than the athlete being unfit, and drops it
+5 s/km. Without that the derived number would never be revisited.

@@ -1175,6 +1175,205 @@ export const MEASURED_BASE = {
  * docs/specs/06-training-block.md:8 already requires marathon pace to be
  * derived from a rehearsal result rather than guessed.
  */
+/**
+ * MEASURED physiology. Not estimated, not modelled, not device-inferred.
+ *
+ * Everything in the pace layer below is derived from these three numbers, so
+ * they are kept separate from anything a formula produced.
+ */
+export const ATHLETE = {
+  /**
+   * Peak heart rate in an activity file, 2026-06-14 (a 9.86 km run at 4:58/km,
+   * avg 175). OVERRIDES the Garmin profile's 196 and Luis's own recollection of
+   * 195 -- 195 appears nowhere in the export. Every heart-rate band derives from
+   * this, and using 196 shifts every ceiling down by about 2.5 %.
+   */
+  hrMax: 201,
+
+  /**
+   * Lactate-threshold heart rate. Garmin auto-detect, 2026-08-08. 88.1 % of
+   * `hrMax`, which is where LT2 sits.
+   *
+   * CORROBORATED INDEPENDENTLY, and this is why it is trusted while the pace
+   * beside it is not: he averaged 174 bpm for 106 minutes in the 2026-07-19
+   * half. Nobody averages above LT2 for 106 minutes, so true threshold HR sits
+   * just above 174 -- and 177 is exactly there. Lu et al. 2025 (Front Physiol
+   * 16:1621996) found smartwatch LT HEART RATE not significantly different from
+   * laboratory graded exercise testing in recreational runners.
+   */
+  lactateThresholdHr: 177,
+
+  /**
+   * Garmin's smoothed resting HR on 2026-09-07; the raw daily value was 50.
+   * Still falling (84 in March), so a RISE may be regression toward a stable
+   * value rather than fatigue -- refit the baseline after the race.
+   *
+   * NOT 45. That is his overnight MINIMUM (`UDSFile.minHeartRate`), a different
+   * quantity, and not 86 either, which is a frozen onboarding value in the zone
+   * profile that has never been measured.
+   */
+  restingHrSmoothed: 57,
+
+  /**
+   * DELIBERATELY ABSENT: Garmin's `lactateThresholdPace` of 4:20.9/km.
+   *
+   * It is 2 s/km SLOWER than his best 5.10 km race pace (4:19/km, 2026-04-11).
+   * Garmin is asserting that his 22-minute race pace is sustainable for an hour,
+   * which refutes itself on his own file. Lu et al. 2025 found Garmin LT PACE
+   * overestimated with MAPE 25.78 %, p < 0.01, in the same paper that validated
+   * its LT heart rate.
+   *
+   * The rule this encodes: TRUST DEVICE HEART-RATE ANCHORS, DISTRUST DEVICE PACE
+   * ANCHORS. Adding this field back is the most likely single way to injure him
+   * -- a weekly 30-minute "tempo" at 4:21/km is a 10 km race effort, prescribed
+   * on top of a volume ramp he has never attempted.
+   */
+} as const;
+
+/**
+ * The one performance every training pace is derived from.
+ *
+ * PROVISIONAL. Replaced by the Battersea Half on 2026-09-12, which is why the
+ * block was built with a race before the build starts.
+ */
+export const PACE_ANCHOR = {
+  source: 'race',
+  date: '2026-07-19',
+  distanceKm: 21.14,
+  timeSec: 6395,
+  /**
+   * Riegel exponent used ONLY to normalise the anchor to a standard distance,
+   * never to predict. 1.109, fitted from his 2026-04-11 5.10 km against this
+   * half.
+   */
+  normalisationExponent: 1.109,
+  normalisedDistanceKm: 21.0975,
+  /** 1:46:21 over 21.0975 km. Every multiplier below scales this. */
+  normalisedPaceSecPerKm: 302.4,
+  reanchorOn: '2026-09-12',
+  /**
+   * Efforts that must NEVER become the anchor, with the reason each is
+   * disqualified. Both look faster than the anchor and neither is real:
+   * 2026-07-26 carries 17:27 of stopped time across 22 laps, and the 2026-04-25
+   * 5.04 km is a 25 s/km outlier against a 4:19/km race three weeks earlier
+   * while recording LOWER mean and max HR (172/196 against 174/199), which is a
+   * distance or GPS fault rather than a performance.
+   */
+  excludedEfforts: ['2026-07-26', '2026-04-25'],
+  /**
+   * Conditions under which Saturday does NOT re-anchor and this stands: the
+   * race was not run flat out, came in slower than 1:54, or the file shows more
+   * than two minutes stopped.
+   */
+  rejectIfSlowerThanSec: 6840,
+  rejectIfStoppedOverSec: 120,
+} as const;
+
+/**
+ * Training zones as MULTIPLIERS of the anchor pace, never as paces.
+ *
+ * Multipliers rather than stored paces so re-anchoring after a race is one
+ * field and the whole block repaces -- and so that no session row anywhere ever
+ * holds a pace, which is REDLINES rule 1 satisfied by construction rather than
+ * by discipline.
+ */
+export const PACE_MULTIPLIERS = {
+  /** Day after quality or a long run. */
+  recovery: [1.36, 1.45],
+
+  /**
+   * About 83 % of the block. ADVISORY: the heart-rate ceiling governs, and this
+   * band is the expected OUTPUT rather than the prescription. It should get
+   * faster across the block at the same heart rate, and that fall is the
+   * adaptation signal.
+   */
+  easy: [1.24, 1.36],
+
+  /**
+   * Marathon pace. x1.085 corresponds to a Riegel exponent of 1.118 -- the
+   * midpoint between his MEASURED half-to-marathon exponent of 1.1315 and the
+   * block's durability target of 1.10. Deliberately does not assume an
+   * adaptation that has not happened yet.
+   */
+  marathon: 1.085,
+
+  /**
+   * Threshold. x0.965 = 4:52/km on the July anchor, from three converging
+   * derivations: Daniels VDOT 42.0 gives 4:54, Riegel to a 3600 s effort gives
+   * 4:46-4:53, and the half-pace-minus-11 s coaching convention gives 4:52.
+   *
+   * All three are formulas and none has been validated on him. The first real
+   * test is the first threshold session of the block.
+   */
+  threshold: 0.965,
+  thresholdBandSecPerKm: 4,
+} as const;
+
+/**
+ * Heart-rate bands, from `ATHLETE.hrMax` and `ATHLETE.lactateThresholdHr`.
+ *
+ * These do NOT move when the pace anchor moves. They are measured; the paces
+ * are derived. Where a pace band and a heart-rate band disagree during a
+ * session, THE HEART RATE WINS and the pace column is wrong.
+ */
+export const HR_ZONES = {
+  recoveryCeiling: 138,
+
+  /**
+   * 74.6 % of 201. The most load-bearing number in the block: easy runs
+   * drifting toward 5:45/km is the specific, likely and invisible way a ramp
+   * from 24 to 100 km a week fails. ~75 % of max is convention rather than a
+   * trial finding, and is flagged as such.
+   */
+  easyCeiling: 150,
+
+  marathonTarget: [158, 168],
+  marathonCeiling: 170,
+
+  /**
+   * The MEAN of the work intervals, not an instantaneous ceiling. Read as a
+   * ceiling it aborts any correctly-paced threshold session by the third rep.
+   */
+  thresholdWorkMean: [172, 177],
+
+  /**
+   * Above this on the work-interval mean, the PACE column is too fast: drop
+   * 5 s/km and re-anchor down. This is the loop that makes the derived
+   * threshold self-correcting rather than a guess nobody revisits.
+   */
+  thresholdPaceTooFastAbove: 180,
+} as const;
+
+/**
+ * Riegel exponents. Moving the first of these is the block's whole thesis.
+ *
+ * A Riegel model predicts t2 = t1 x (d2/d1)^k. k is the fatigue exponent: 1.06
+ * is the population value, and a HIGHER k means performance decays faster with
+ * distance -- poor durability, which is what limited base volume produces.
+ */
+export const RIEGEL = {
+  /** Riegel 1981. The population value, not re-derived here. */
+  population: 1.06,
+
+  /**
+   * HIS measured exponent, from his own normalised 2026-07-19 half and
+   * 2026-05-10 marathon. n = 2, no error bars, and one of the two is a single
+   * marathon in which a fuelling or pacing error is indistinguishable from
+   * physiology. Treat as a working estimate, not a constant.
+   */
+  measured: 1.1315,
+
+  /**
+   * The target. Six weeks of volume are supposed to move his exponent toward
+   * the population value, which is where the block's benefit would show up.
+   *
+   * NO TRIAL SUPPORTS THIS. It is a reasoned bet with a measurement attached
+   * (see the durability check in the validation plan), and calling it anything
+   * firmer would be dishonest.
+   */
+  durabilityTarget: 1.1,
+} as const;
+
 export const PACE_ESTIMATES = {
   /** Garmin's predictions on 2026-09-06, in seconds. */
   garminPredictionSeconds: {
