@@ -802,6 +802,167 @@ export const SHOES = {
 } as const;
 
 /**
+ * The RULES a training week is generated from.
+ *
+ * This replaces writing sessions out by hand. A hand-written block is a plan;
+ * these are the constraints a plan must satisfy, which is what lets the planner
+ * regenerate when something changes -- a race result re-anchors the paces, an
+ * injury drops a week, a target moves. `src/domain/planner/prescribe.ts` reads
+ * this and emits sessions.
+ *
+ * Every number carries the evidence it came from, or says it has none.
+ */
+export const PRESCRIPTION = {
+  /**
+   * Quality sessions per week, by phase.
+   *
+   * Peak is ZERO on purpose: week 4's Lincoln Half at marathon pace spends the
+   * entire quality budget, and adding threshold work on top of a 100 km week is
+   * the combination that ends blocks. Same for the 10K in the taper.
+   *
+   * Evidence grade: EXPERT PRACTICE. Festa et al. 2019 randomised 38
+   * recreational runners at VO2max 53.2 -- this athlete is 53.0 -- to polarised
+   * versus threshold-heavy for eight weeks and found NO significant difference.
+   * So the count is a risk decision, not an optimisation, and must never be
+   * described as optimal.
+   */
+  qualityPerWeek: {
+    'race-taper': 0,
+    rebuild: 1,
+    build: 1,
+    peak: 0,
+    taper: 1,
+    race: 0,
+  } as Record<string, number>,
+
+  /**
+   * Threshold work as a share of the week's kilometres, capped.
+   *
+   * Daniels' convention, no dose-response study behind it. It binds in the
+   * rebuild week (60 km x 0.10 = 6 km) and is slack everywhere else, which is
+   * the right shape: the tightest constraint sits on the week that opens two
+   * days after a maximal half.
+   */
+  thresholdMaxFractionOfWeek: 0.1,
+  /** And never more than this in absolute terms, whatever the week's volume. */
+  thresholdMaxKm: 6.5,
+
+  /**
+   * How much of the long run is run at marathon pace, by phase.
+   *
+   * Rises through the block: the point of a long run early is time on feet, and
+   * late it is marathon-specific durability. Zero in the taper's final long run
+   * is deliberate -- that one is a full dress rehearsal at race pace, handled
+   * separately.
+   */
+  longRunMpFraction: {
+    'race-taper': 0,
+    rebuild: 0.23,
+    build: 0.3,
+    peak: 0.64,
+    taper: 0.44,
+    race: 0,
+  } as Record<string, number>,
+
+  /**
+   * Strides: 20 s accelerations at about 5 km effort, full walk-back recovery.
+   *
+   * On easy days only, and never the day before quality or a long run. Close to
+   * zero fatigue cost and they keep turnover from flattening during a volume
+   * block, which is the specific thing high easy mileage does to a runner.
+   */
+  strides: { count: 6, seconds: 20, onEasyDaysOnly: true },
+
+  /** Recovery days sit under this HR ceiling regardless of how they feel. */
+  recoveryAfterHardDays: true,
+
+  /**
+   * The single-session cap, restated here because the generator needs it when
+   * it sizes a long run: no session over this share of the trailing 30-day
+   * longest run. Nielsen 2025, BJSM. Advisory, never blocking -- see
+   * GUARDRAILS.singleSessionSpikePct for why a hard version refuses the race it
+   * exists to serve.
+   */
+  respectSpikeCap: true,
+} as const;
+
+/**
+ * Strength work. Three sessions a week, push / pull / legs.
+ *
+ * Added 2026-09-11 at Luis's instruction, and it is the best-evidenced thing in
+ * the whole block. Lauersen et al. 2018 (Br J Sports Med) pooled the
+ * strength-training RCTs and found a risk ratio of 0.338 for overuse injury --
+ * strength training cuts injury risk to about a third. Nothing else here has a
+ * number that good, and until now the plan contained no strength work at all
+ * while ramping to a volume this athlete has never run.
+ *
+ * The running-economy case is separate and also real (Blagrove 2018,
+ * Balsalobre-Fernandez 2016: roughly 2-8 % improvement from heavy resistance
+ * and plyometric work over 6-14 weeks), but the adaptation window is longer than
+ * the runway here. Treat economy gains as a bonus and injury protection as the
+ * reason.
+ *
+ * ## The scheduling rule, which is the part that matters
+ *
+ * LEGS GO ON THE HARDEST RUNNING DAY, several hours after the run. Push and
+ * pull may go anywhere, including easy days.
+ *
+ * The asymmetry is not arbitrary. Upper-body work does not meaningfully compete
+ * with running recovery -- it shares neither the muscle groups nor the
+ * connective tissue under load -- so it can sit on a rest or easy day without
+ * compromising it. Lower-body work does compete, directly. Putting it on an
+ * easy day turns that day hard, which is how a polarised distribution quietly
+ * collapses into everything-moderate, the single most common way a block fails.
+ * Consolidating it onto an already-hard day keeps the easy days easy.
+ *
+ * `legsMinHoursAfterRun` is the separation within that hard day. Same-session
+ * concurrent training blunts both adaptations; several hours apart does not.
+ */
+export const STRENGTH = {
+  sessionsPerWeek: 3,
+  split: ['push', 'pull', 'legs'] as const,
+
+  /** Legs sits on the week's hardest running day, this long after the run. */
+  legsOnHardestRunDay: true,
+  legsMinHoursAfterRun: 6,
+
+  /** Push and pull carry no placement constraint. See the note above. */
+  upperBodyUnconstrained: true,
+
+  /**
+   * Heavy and low-rep, NOT hypertrophy. The economy and injury evidence is for
+   * heavy resistance work; three sets of twelve to failure buys soreness that
+   * competes with running and adaptations that do not transfer.
+   */
+  legs: {
+    scheme: '3-5 sets x 3-6 reps, heavy, long rests',
+    lifts: ['back squat or trap-bar deadlift', 'split squat', 'calf raise'],
+    plyometrics:
+      '2 x 10 pogo hops or box jumps, before the lifts, only when fresh',
+    note: 'Stop if bar speed drops. This is a stimulus, not a test.',
+  },
+
+  /**
+   * Weeks in which lower-body work is dropped entirely. Heavy legs inside the
+   * final fortnight adds fatigue the taper exists to shed, and the injury
+   * protection is already banked by then.
+   */
+  dropLegsFromWeek: 6,
+  /** Race week: upper body only, early, or nothing at all. */
+  raceWeekPolicy: 'one light push session Monday, or nothing. Never legs.',
+
+  /**
+   * PROVISIONAL. Three sessions a week is Luis's instruction rather than a
+   * fitted dose; the trials behind Lauersen mostly ran two to three sessions of
+   * lower-body work, where this schedules one. The injury finding may therefore
+   * be weaker here than the headline risk ratio suggests, and the honest read is
+   * that one heavy leg session a week is a maintenance dose, not the trial dose.
+   */
+  evidence:
+    'Lauersen 2018 BJSM, RR 0.338 for overuse injury (strength-training RCTs)',
+} as const;
+
+/**
  * Replan triggers. docs/specs/03-planner.md:13-18.
  */
 export const REPLAN = {

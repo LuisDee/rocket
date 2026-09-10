@@ -1,0 +1,652 @@
+{
+  "decision": {
+    "canApiDoIt": "No. The Strava API physically cannot create a route, and no scope, access tier or subscription changes that. Strava's own machine-readable spec (developers.strava.com/swagger/swagger.json) contains 31 operations; exactly two of them are POSTs \u2014 POST /activities and POST /uploads \u2014 and both create ACTIVITIES (a recorded run). Routes appear only as five read-only GETs. There is no POST /routes, and no write scope that could authorise one exists (the full scope list is read, read_all, profile:read_all, profile:write, activity:read, activity:read_all, activity:write). The Strava MCP server connected to your Claude account is also read-only \u2014 it has no write tool of any kind. Anyone claiming a Strava route-creation endpoint is describing Strava's internal website API, which is cookie/CSRF-authenticated, undocumented, and outside the terms attached to client id 262848 (the one shared with DoHardThings). So: the token you already have cannot do this, and neither could a fresh one.",
+    "recommendedPath": "Skip Strava, import the GPX into Garmin Connect as a Course. One sentence why: Strava's route creation has no API at all, its web GPX import is desktop-only and documented as a paid-subscription feature, and even a Strava route would then have to sync onward to Garmin anyway \u2014 so Garmin Connect is the same destination with the detour, the paywall and the API dead-end removed. Bonus: Strava's route builder converts an import into an editable route on Strava's own routing network and may re-snap the line, which would quietly undo the surface-classified road-only choice routr made; Garmin's course import keeps your track points.",
+    "exactSteps": [
+      "Move the file out of volatile storage first. It currently sits at /private/tmp/claude-501/-Users-luisdeburnay-dev-routr/0f6602a3-b43a-46c6-b392-056cf6dbcf31/scratchpad/route.gpx and /tmp is wiped on reboot. Run: cp \"/private/tmp/claude-501/-Users-luisdeburnay-dev-routr/0f6602a3-b43a-46c6-b392-056cf6dbcf31/scratchpad/route.gpx\" ~/routr-road-only-6.1km.gpx  \u2014 I can do this for you, see the automation note.",
+      "This step needs the Mac (or any desktop browser), not the phone: Strava's importer shows a 'Made for your desktop' block on small screens, and the phone apps have no file picker for this. On the Mac open https://connect.garmin.com/modern/courses and sign in to Garmin Connect. If that URL redirects, the page is in the left sidebar under 'Training & Planning' (older layout: 'Training') then 'Courses'.",
+      "On the Courses page click the 'Import' button and choose ~/routr-road-only-6.1km.gpx.",
+      "Garmin parses the file and opens the course editor with your 6.06 km line drawn on the map. Set the activity type to Running, give it a name (e.g. 'Routr road-only 6.1 km'), and click Save.",
+      "Sanity check before you leave the page: the distance Garmin shows should read about 6.06 km. If it does, the exact line routr generated survived the import intact. If it reads noticeably different, Garmin re-snapped the geometry \u2014 stop and say so, because the point of a routr route is the specific roads it picked.",
+      "Open the saved course and use 'Send to Device', then pick the Fenix 8. This is optional \u2014 courses sync on their own the next time the Garmin Connect app on your phone talks to the watch over Bluetooth. Sending explicitly just makes it immediate.",
+      "On the Fenix 8: Run (or your running activity profile) then Navigation then Courses, pick the course, and start it. Garmin's limit is 600 miles per course, so 6 km is a non-issue.",
+      "OPTIONAL, only if you also want it living in Strava's My Routes: separate desktop-browser job at https://www.strava.com/maps/create (the old https://www.strava.com/routes/new now 301-redirects there). Click 'Upload GPX' in the floating toolbar on the map, then 'Choose File' in the 'Import GPX' modal, pick the same file, set Route Type to Run if it asks, click 'Import GPX', then 'Save Route' and toggle 'Star Route' on. This requires a Strava subscription and will not put anything on your watch that Garmin hasn't already."
+    ],
+    "whatIcanAutomate": "Almost nothing, and I'd rather say that plainly than dress it up. Concretely: (1) I can copy the GPX out of the volatile /tmp scratchpad into your home folder so it survives a reboot, and push a copy to your phone if you want it there \u2014 that's real and takes one command. (2) That is the entire list. The reason the rest is not automatable: there is NO authenticated Garmin session on this machine. I checked directly \u2014 no ~/.garminconnect, no ~/.garth, no ~/.config/garth, no oauth1_token.json or oauth2_token.json anywhere under your home directory. The only Garmin artefact present is a GDPR data-export zip at /Users/luisdeburnay/garmin-export/2026-09-08/, which is data, not a login. Rocket's own docs/specs/07-wiring-todo.md still lists '[ ] Garmin: one-time interactive auth (MFA) on the server' as unticked. Getting a session means an interactive multi-factor login that only you can complete \u2014 which costs more of your attention than the four clicks the manual path costs. And the Strava OAuth token, though it has activity:write, is useless here: no route endpoint exists to call, and it lacks the read_all scope, so it could not even read a private route back to confirm one landed.",
+    "whatHeMustDo": "Sign in to Garmin Connect in a desktop browser and do steps 2 to 6 \u2014 roughly four clicks and two minutes. That's it. The watch sync after that is automatic. One honest caveat on the button names: Garmin's support site (support.garmin.com) returned HTTP 403 to every automated fetch this session and the web-search budget was exhausted, so the exact wording of the 2026 Garmin Connect UI could not be verified. The shape is certain \u2014 a Courses page with an import control and a per-course send-to-device action both provably exist, because the underlying endpoints do \u2014 but expect to hunt for a button rather than match the words literally. The direct URL in step 2 is there so you land on the right page without navigating.",
+    "rejectedOptions": [
+      {
+        "option": "Upload the GPX as a Strava ACTIVITY via POST /uploads (the code already working in /Users/luisdeburnay/dev/rocket/src/lib/strava.ts)",
+        "why": "This is the trap, and it is the single most important thing to not do. The call would succeed. It would create a recorded 6.06 km run you have never done \u2014 on your feed, in your training history, in your weekly mileage. It fabricates a workout. Refused outright, and worth flagging loudly because the working code for exactly this is already sitting in the repo and looks like the obvious tool."
+      },
+      {
+        "option": "Upload the GPX to Garmin's /upload-service/upload instead",
+        "why": "Identical fabrication, one system upstream, and worse: Garmin re-exports new activities to Strava, so it would invent the same fake run in both places. python-garminconnect's upload_activity() accepts GPX happily, which is precisely why it's dangerous."
+      },
+      {
+        "option": "Upload as an activity, then use Strava's 'create a route for your activity' button on the activity page",
+        "why": "That feature is real, but it requires fabricating the run first. Same refusal as above. Flagging it only because most third-party guides describe this when they claim 'GPX to Strava route works' \u2014 so nobody rediscovers it and thinks it's the answer."
+      },
+      {
+        "option": "POST /routes on the Strava API",
+        "why": "DOES NOT EXIST. Dropped entirely. Enumerated every path and method in Strava's own OpenAPI spec: the only POSTs in the whole API are /activities and /uploads. Writing code against this returns 404."
+      },
+      {
+        "option": "Drive Strava's internal website endpoints (session cookie plus CSRF token) to create the route programmatically",
+        "why": "Technically what Strava's own web app does, but undocumented, unversioned, and outside the API terms attached to client id 262848 \u2014 the same client id shared with DoHardThings. Downside of getting caught isn't scoped to this task."
+      },
+      {
+        "option": "Use the connected Strava MCP server",
+        "why": "Read-only. Its entire tool surface is eligibility, get_activity_performance, get_activity_streams, get_athlete_profile, get_athlete_zones, get_club_info, get_gear, get_strength_workout_details, get_training_plan, health, list_activities. No write tool of any kind."
+      },
+      {
+        "option": "Strava's web route builder as the primary path (strava.com/maps/create, 'Upload GPX')",
+        "why": "It genuinely works \u2014 I confirmed the 'Upload GPX' control is live in production today by reading the page's own string table. But three strikes against it as the main route: desktop-only (it shows a 'Made for your desktop' modal on phones, and the Strava mobile app's route builder is tap/draw only with no file import); Strava's own help centre lists 'Create Routes' as a subscription feature and both route-builder articles open 'With a Strava subscription...'; and its builder may re-snap your imported line to Strava's routing network, undoing routr's road-only choice. Kept as the optional step 8 if you specifically want the route living in Strava too."
+      },
+      {
+        "option": "Automate it through Garmin's internal course API (POST /course-service/course/import then POST /course-service/course)",
+        "why": "Real, verified across eight-plus independent open-source implementations in four languages, and free. Rejected for THIS job on cost: there's no Garmin session on this machine, so it needs an interactive MFA login first; python-garminconnect has zero course support (I grepped the installed 0.3.11 source \u2014 no 'course' string anywhere), so it's caller-side code on its generic connectapi() escape hatch; the caller must compute distance and bounding box itself; and the load-bearing claim that the import endpoint accepts GPX comes from an open-source spike whose own docs say it was never run against live credentials, so it may turn out to be TCX-only. For one route that's more work than four clicks. Worth building only if routr starts publishing routes routinely \u2014 and if it does, also wire up GET/PUT/DELETE /course-service/course/{id} for idempotency, or every re-publish creates a duplicate course."
+      },
+      {
+        "option": "Sideload the file to the watch over USB",
+        "why": "Circular and worst-in-class on macOS. The Fenix 8 speaks MTP, which Finder will not mount, and the GARMIN/Courses folder wants a FIT course file, not GPX \u2014 and the only clean way to get a Garmin-shaped course FIT is to download it from Garmin Connect, which means the course already exists and you've already won without the cable."
+      },
+      {
+        "option": "RideWithGPS, Komoot, or plotaroute as an intermediary",
+        "why": "Each adds an account and a sync hop to arrive at exactly the same Garmin Connect course. RideWithGPS is the only one with genuinely public API docs, and even there GPX-upload-to-create-route isn't documented and its automatic Garmin sync has historically been a paid tier. Strictly more work than talking to Garmin directly."
+      }
+    ],
+    "subscriptionNote": "Garmin: free. Course creation, GPX import, unlimited courses and device sync are not gated \u2014 Garmin Connect+ exists as a paid product but does not paywall courses. (Not independently re-verified this session, since support.garmin.com refuses automated fetches, but there's no evidence pointing the other way and this has been free for years.) Strava: this is the reason not to route through Strava. Its help centre article 'What Features Are Included in a Strava Subscription' lists verbatim under Route Exploration: 'Create Routes: Create routes from scratch on the Strava website and the Strava mobile app', and the 'Routes on Web' article opens 'With a Strava subscription, you can create new routes from scratch...'. The one genuine ambiguity: the 'Uploading Route Files' article itself never mentions a subscription, and the live builder's paywall is a soft save-time upsell ('Customize this route \u2014 Get all our route planning tools with a Strava subscription', with 'Not right now' and 'Subscribe' buttons) rather than a visible hard block, and that upsell names only the planning tools (gradient, segments, discovery), not saving. So a free account might be able to save a GPX-derived route. Unresolved \u2014 nobody checked your account state, deliberately. If you want it settled before trying, the read-only Strava MCP tool 'eligibility' or 'get_athlete_profile' answers it in one call."
+  },
+  "angles": [
+    {
+      "key": "api",
+      "title": "The official Strava API surface for routes",
+      "research": {
+        "angle": "The official Strava API surface for routes \u2014 what the current public v3 reference and OpenAPI spec actually document",
+        "searchesRun": [
+          "WebFetch developers.strava.com/docs/reference/ \u2014 full endpoint list, looking for any route-creating method",
+          "WebFetch developers.strava.com/docs/reference/#api-Routes \u2014 per-endpoint detail and verbatim scope text",
+          "WebFetch developers.strava.com/swagger/swagger.json \u2014 the machine-readable OpenAPI spec, enumerating EVERY path and method (this is the exhaustive check)",
+          "WebFetch developers.strava.com/docs/uploads/ \u2014 what POST /uploads creates and every parameter/data_type",
+          "WebFetch developers.strava.com/docs/authentication/ \u2014 every OAuth scope verbatim, checking for any route write scope",
+          "WebFetch developers.strava.com/docs/rate-limits/ \u2014 current limits and higher-access process",
+          "WebFetch developers.strava.com/docs/getting-started/ \u2014 single-player mode, athlete cap, app review",
+          "WebFetch support.strava.com (3 attempts, all wrong/404 articles) \u2014 website route-builder behaviour NOT established; one WebSearch call was refused, session web-search budget (200/200) already exhausted by other agents"
+        ],
+        "verdict": "There is NO endpoint in the public Strava API that creates a route. This is not an inference from silence \u2014 I enumerated every path and method in Strava's own OpenAPI spec (developers.strava.com/swagger/swagger.json). The spec contains exactly two POST paths (/activities, /uploads) and three PUT paths (/athlete, /activities/{id}, /segments/{id}/starred). Routes appear only as four GET paths plus a streams GET. Nothing writes a route. Correspondingly, there is no route:write or routes:write scope \u2014 the complete scope list is read, read_all, profile:read_all, profile:write, activity:read, activity:read_all, activity:write, and the only write scopes cover profile fields, segment starring, and activities/uploads. POST /uploads is documented as \"Upload Activity\"; its parameters are file, data_type, sport_type, name, description, trainer, commute, external_id, and its data_type values are fit, fit.gz, tcx, tcx.gz, gpx, gpx.gz, json. None of those parameters selects \"route\" \u2014 there is no flag, no alternate data_type, nothing. Sending the routr GPX to POST /uploads WILL create an activity (a recorded run Luis did not do), which is precisely the outcome to avoid. So: the GPX cannot be turned into a Strava route by any documented API call, with any scope, at any access tier. Anything that appears to do this is either Strava's own logged-in website using private internal endpoints, or a third-party tool driving that website.",
+        "endpoints": [
+          {
+            "method": "GET",
+            "path": "/routes/{id}",
+            "creates": "neither \u2014 reads one route",
+            "documented": "yes",
+            "scopesRequired": "Docs state verbatim: \"Requires activity:read for Everyone and Followers activities. Requires activity:read_all for Only Me activities.\"",
+            "note": "Read-only. Returns a Route object."
+          },
+          {
+            "method": "GET",
+            "path": "/athletes/{id}/routes",
+            "creates": "neither \u2014 lists an athlete's routes",
+            "documented": "yes",
+            "scopesRequired": "Same verbatim text as above (activity:read / activity:read_all)",
+            "note": "Note the path shape: the reference page's table-of-contents label reads \"/routes/athletes/{id}\", but both the endpoint detail page and swagger.json give the real path as /athletes/{id}/routes. Use the swagger form."
+          },
+          {
+            "method": "GET",
+            "path": "/routes/{id}/export_gpx",
+            "creates": "neither \u2014 downloads GPX",
+            "documented": "yes",
+            "scopesRequired": "not restated on the endpoint; same routes-read scoping applies",
+            "note": "Export OUT of Strava, not in. This is the direction Luis does not need."
+          },
+          {
+            "method": "GET",
+            "path": "/routes/{id}/export_tcx",
+            "creates": "neither \u2014 downloads TCX",
+            "documented": "yes",
+            "scopesRequired": "not restated on the endpoint",
+            "note": "Export out only."
+          },
+          {
+            "method": "GET",
+            "path": "/routes/{id}/streams",
+            "creates": "neither \u2014 reads route streams",
+            "documented": "yes",
+            "scopesRequired": "not restated on the endpoint",
+            "note": "Present in swagger.json; easy to miss because the human-readable reference groups it under Streams, not Routes."
+          },
+          {
+            "method": "POST",
+            "path": "/uploads",
+            "creates": "ACTIVITY \u2014 never a route",
+            "documented": "yes",
+            "scopesRequired": "activity:write",
+            "note": "Params: file (required), data_type (required), sport_type, name, description, trainer, commute, external_id. data_type \u2208 {fit, fit.gz, tcx, tcx.gz, gpx, gpx.gz, json}. I checked every parameter for anything route-shaped: there is none. This is the endpoint rocket/src/lib/strava.ts already uses, and it is the wrong tool here."
+          },
+          {
+            "method": "GET",
+            "path": "/uploads/{uploadId}",
+            "creates": "neither \u2014 polls upload status",
+            "documented": "yes",
+            "scopesRequired": "activity:write (paired with the POST)",
+            "note": "The poll half of the upload flow."
+          },
+          {
+            "method": "POST",
+            "path": "/activities",
+            "creates": "ACTIVITY (manual entry, no file)",
+            "documented": "yes",
+            "scopesRequired": "activity:write",
+            "note": "The only other POST in the entire API. Manual activity creation \u2014 takes name/type/duration, not a GPS track, and not a route."
+          },
+          {
+            "method": "POST",
+            "path": "/routes",
+            "creates": "DOES NOT EXIST",
+            "documented": "no",
+            "scopesRequired": "n/a",
+            "note": "Explicitly absent from swagger.json. Do not invent it. Anyone who tells you this works is describing Strava's internal website API (session-cookie + CSRF authenticated, not OAuth), which is not the public API and is not covered by the API agreement."
+          }
+        ],
+        "manualPath": "none via the API. From this angle the honest answer is that no click-path can be reached through developers.strava.com \u2014 route creation lives entirely in the logged-in strava.com web app and the mobile apps, which this angle did not cover. I attempted three Strava support articles to pin down the exact route-builder click-path and GPX-import behaviour; all three returned the wrong article or 404, and the session's web-search budget was already exhausted (200/200) so I could not locate the correct ones. Treat the manual path as UNESTABLISHED by me \u2014 another agent's angle owns it.",
+        "subscriptionRequired": "Not addressed anywhere in the developer documentation \u2014 the API reference, authentication, uploads, rate-limits and getting-started pages make no mention of a Strava subscription gating anything. Subscription gating (widely believed to apply to the website's route builder) is a consumer-product question, not an API one, and I could not verify it in this session after the support-article fetches failed. Do not treat \"no mention\" as \"not required\" \u2014 it is simply out of scope for the API docs.",
+        "caveats": [
+          "The exhaustiveness claim rests on swagger.json, Strava's own machine-readable spec. That is the strongest available evidence and it is unambiguous, but it describes the DOCUMENTED public API only. Strava's website plainly creates routes through internal endpoints; those are undocumented, cookie/CSRF-authenticated rather than OAuth, unversioned, and outside the API terms. I did not probe them and I am not recommending them.",
+          "Documented scope inconsistency worth knowing before anyone debugs a 401: the Routes endpoints say they need activity:read / activity:read_all, while the authentication page says read_all is what grants \"read private routes\". These two statements do not agree. Luis's existing token has read, activity:write and activity:read_all but NOT read_all \u2014 if a routes GET ever returns empty or 401 for a private route, that mismatch is the first thing to check. I have not tested this (no API calls permitted), so it is a documented ambiguity, not a confirmed behaviour.",
+          "Rate limits are not the binding constraint here, but for completeness: 200 requests/15min and 2,000/day overall; 100/15min and 1,000/day for non-upload endpoints (non-upload excludes POST /activities, POST /uploads, and activity media upload). Headers are X-RateLimit and X-ReadRateLimit.",
+          "App-tier constraint that could bite if this ever grows beyond Luis: a new app starts in \"single-player mode\" \u2014 only the developer's own Strava account can authenticate. Self-upgrading raises capacity to 10 athletes and doubles the limits (read 200/15min & 2,000/day; overall 400/15min & 4,000/day). Past 10 connected athletes requires formal app review, and the docs state increased access \"is not a guarantee\". Client id 262848 is shared with the DoHardThings project, so any review submission or reconfiguration would affect that project too \u2014 another reason not to touch the app's settings.",
+          "The tempting wrong move, stated plainly so nobody drifts into it: POST /uploads with the routr GPX will succeed, and it will create an ACTIVITY. The existing working code in /Users/luisdeburnay/dev/rocket/src/lib/strava.ts is exactly that code path. Reusing it here produces the outcome the task forbids.",
+          "I made no API calls and modified no files, per the brief."
+        ],
+        "sources": [
+          "https://developers.strava.com/swagger/swagger.json",
+          "https://developers.strava.com/docs/reference/",
+          "https://developers.strava.com/docs/reference/#api-Routes",
+          "https://developers.strava.com/docs/uploads/",
+          "https://developers.strava.com/docs/authentication/",
+          "https://developers.strava.com/docs/rate-limits/",
+          "https://developers.strava.com/docs/getting-started/"
+        ]
+      },
+      "verification": {
+        "angle": "The official Strava API surface for routes \u2014 adversarial verification against current official docs (swagger.json enumerated locally, plus five docs pages fetched)",
+        "checks": [
+          {
+            "claim": "No endpoint in the public Strava API creates a route; POST /routes does not exist",
+            "verdict": "CONFIRMED",
+            "note": "I curl'd https://developers.strava.com/swagger/swagger.json (97,967 bytes, info.title 'Strava API v3', version 3.0.0) and enumerated every path+method programmatically. 31 operations total. No /routes POST or PUT. Independently, WebFetch of developers.strava.com/docs/reference/ returned no POST/PUT under Routes. Two independent sources agree."
+          },
+          {
+            "claim": "swagger.json contains exactly two POST paths (/activities, /uploads) and three PUT paths (/athlete, /activities/{id}, /segments/{id}/starred)",
+            "verdict": "CONFIRMED",
+            "note": "Exact match to my enumeration. POST: /activities (createActivity), /uploads (createUpload). PUT: /athlete (updateLoggedInAthlete), /activities/{id} (updateActivityById), /segments/{id}/starred (starSegment). Nothing else writes."
+          },
+          {
+            "claim": "Routes appear as four GET paths plus a streams GET",
+            "verdict": "CONFIRMED",
+            "note": "GET /routes/{id}, /athletes/{id}/routes, /routes/{id}/export_gpx, /routes/{id}/export_tcx, /routes/{id}/streams. All five present in swagger.json with operationIds getRouteById, getRoutesByAthleteId, getRouteAsGPX, getRouteAsTCX, getRouteStreams."
+          },
+          {
+            "claim": "The real path is /athletes/{id}/routes, not /routes/athletes/{id}",
+            "verdict": "CONFIRMED",
+            "note": "swagger.json path key is literally '/athletes/{id}/routes'. Base is host www.strava.com + basePath /api/v3."
+          },
+          {
+            "claim": "Routes endpoints require activity:read for Everyone/Followers and activity:read_all for Only Me \u2014 quoted as verbatim docs text",
+            "verdict": "WRONG",
+            "note": "This is a misattribution, and it is the one substantive error. The 'activity:read / activity:read_all' sentence belongs to ACTIVITY endpoints. Every routes endpoint's actual description reads: 'Requires read_all scope for private routes.' (getRouteById, getRouteAsGPX, getRouteAsTCX, getRouteStreams verbatim in swagger.json; getRoutesByAthleteId says 'Private routes are filtered out unless requested by a token with read_all scope.') The reference HTML confirms \u2014 WebFetch found no activity:read mention anywhere in the Routes section. Practical consequence is the opposite of what the agent implied: activity:read_all is irrelevant to routes; plain read_all is what matters."
+          },
+          {
+            "claim": "There is a documented scope inconsistency between the Routes endpoints and the authentication page",
+            "verdict": "WRONG",
+            "note": "The inconsistency is the agent's own, created by the misquote above. The two pages agree: authentication says read_all = 'read private routes, private segments, and private events for the user'; the routes endpoints say 'Requires read_all scope for private routes.' Same scope, same meaning. The agent's downstream operational point survives by luck: Luis's token has read but NOT read_all, so a private route he creates on the website will be invisible to GET /athletes/{id}/routes \u2014 it will return an empty list, not a 401. Worth keeping; the reasoning behind it was not."
+          },
+          {
+            "claim": "The complete scope list is read, read_all, profile:read_all, profile:write, activity:read, activity:read_all, activity:write, with no route write scope",
+            "verdict": "CONFIRMED",
+            "note": "Exact match against developers.strava.com/docs/authentication/. read explicitly covers 'public routes'; read_all covers 'private routes'. Both are read-only verbs. No route:write, routes:write, or anything resembling one."
+          },
+          {
+            "claim": "POST /uploads params are file, data_type, sport_type, name, description, trainer, commute, external_id",
+            "verdict": "CONFIRMED",
+            "note": "Confirmed against developers.strava.com/docs/uploads/ (I curl'd and grepped the raw HTML). sport_type is documented there with the full enum, and activity_type is marked 'Deprecated: prefer using sport_type'. Note swagger.json does NOT list sport_type \u2014 the machine spec is stale relative to the prose docs. The agent got this right despite claiming swagger as its source."
+          },
+          {
+            "claim": "data_type values are fit, fit.gz, tcx, tcx.gz, gpx, gpx.gz, json",
+            "verdict": "CONFIRMED",
+            "note": "Verbatim from docs/uploads/: 'possible values : fit, fit.gz, tcx, tcx.gz, gpx, gpx.gz, json'. swagger.json omits json (stale again). json is Strength-Training-only ('WeightTraining, HighIntensityIntervalTraining, Workout, and Crossfit activities only') and irrelevant here."
+          },
+          {
+            "claim": "No upload parameter selects 'route' \u2014 POST /uploads always creates an activity",
+            "verdict": "CONFIRMED",
+            "note": "I grepped the raw HTML of docs/uploads/ for 'route': zero hits on the entire page. Endpoint summary in swagger is 'Upload Activity', description 'Uploads a new data file to create an activity from.' Every parameter description says 'the resulting activity'. The agent's warning that reusing rocket/src/lib/strava.ts here produces a fake recorded run is correct and is the most important line in the findings."
+          },
+          {
+            "claim": "Strava subscription is not addressed anywhere in the developer documentation",
+            "verdict": "WRONG",
+            "note": "The getting-started page \u2014 which the agent lists as fetched \u2014 says it twice, verbatim: 'A Strava subscription is a prerequisite for creating an app.' and, on creating the app at strava.com/settings/api, 'Note: A Strava subscription is required.' This does not answer whether the website's route builder needs a subscription (still open, other angle's territory), but 'not addressed anywhere in the developer documentation' is false. Low practical impact \u2014 client id 262848 already exists, so that gate was cleared long ago \u2014 but it is a claim of absence contradicted by a page the agent says it read."
+          },
+          {
+            "claim": "Rate limits: 200/15min and 2,000/day overall; 100/15min and 1,000/day non-upload; X-RateLimit and X-ReadRateLimit headers",
+            "verdict": "CONFIRMED",
+            "note": "Exact match to docs/rate-limits/. Non-upload excludes activities#create, uploads#create, activities#upload_media. Four headers: X-RateLimit-Limit/Usage, X-ReadRateLimit-Limit/Usage, each two comma-separated values (15min, day). Not the binding constraint here."
+          },
+          {
+            "claim": "New apps start in single-player mode; self-upgrade gives 10 athletes and 400/15min & 4,000/day overall, 200/15min & 2,000/day read; past 10 requires app review",
+            "verdict": "CONFIRMED",
+            "note": "Verbatim from getting-started: 'All new applications start in single-player mode... only your own Strava account can authenticate', 'Athlete capacity of 10', 'Read read limits: 200 requests / 15min & 2,000 requests / day', 'Overall rate limits: 400 requests / 15min & 4,000 requests / day', 'Once your app reaches 10 connected athletes... submit your app for review'. The agent's added phrase 'is not a guarantee' does not appear on this page \u2014 I could not locate it; treat that flourish as unsourced, though it changes nothing."
+          },
+          {
+            "claim": "The swagger.json enumeration proves exhaustiveness of the documented public API",
+            "verdict": "CONFIRMED",
+            "note": "Holds, but the argument needs a second leg the agent did not supply. swagger.json is demonstrably behind the prose docs (missing sport_type and the json data_type), so 'absent from swagger' alone is not proof of absence from the API. The conclusion survives because two further independent facts point the same way: the human reference page shows no route write operation, and no write scope exists that could authorise one. Three legs, same answer."
+          }
+        ],
+        "inventedEndpoints": [],
+        "missed": [
+          "The stale-spec problem: swagger.json omits sport_type and the json data_type that docs/uploads/ documents, which means Strava's machine-readable spec lags its prose docs. The agent leaned its entire exhaustiveness claim on that one file while unknowingly quoting the prose docs for upload params. The conclusion is right; the epistemics were one source short. If anyone re-checks this in future, check the reference page and the scope list too \u2014 a spec that lags by two upload parameters could in principle lag by an endpoint.",
+          "The scope that actually matters for verifying the result: read_all, not activity:read_all. Luis's token has read, activity:write, activity:read_all \u2014 no read_all. So after someone creates this route by hand on the website, GET /athletes/{id}/routes will show it only if it is public. A private route returns an empty list with a 200, not an error. Anyone who uses the API to confirm the route landed will conclude it failed when it did not.",
+          "The API Agreement angle went unstated in concrete terms. The agent correctly refused to recommend Strava's internal website endpoints, but the reason is worth naming plainly for whoever acts next: those are session-cookie/CSRF authenticated, undocumented, unversioned, and driving them is outside the terms attached to client id 262848 \u2014 the same client id shared with DoHardThings. The downside of getting caught is not scoped to this task.",
+          "Whether the Strava website's route builder itself requires a subscription remains genuinely unestablished. The agent flagged this honestly. It is the single open question that decides whether the manual path is even available to Luis, and no angle has answered it."
+        ]
+      }
+    },
+    {
+      "key": "web",
+      "title": "The Strava website and mobile app import path",
+      "research": {
+        "angle": "Strava website and mobile app import path (what a human can do through Strava's own interfaces)",
+        "searchesRun": [
+          "WebSearch budget for this session was already exhausted (200/200) before I started \u2014 zero WebSearch calls succeeded. All findings below come from direct fetches of Strava's own current documentation and live web app, not from search results or blog posts.",
+          "Fetched support.strava.com root and discovered the help centre migrated off Zendesk to an Intercom-style app (old /hc/en-us/articles/... URLs and the Zendesk /api/v2/help_center search API now return 404 \u2014 this is why most third-party guides link to dead Strava URLs)",
+          "Enumerated all 60 articles in the 'Segments and Routes' collection (https://support.strava.com/en-us/collections/19657604-segments-and-routes)",
+          "Help-centre in-app search for: 'gpx', 'create route from activity', 'import route', 'subscription features', 'free features', 'create a route from an existing activity'",
+          "Fetched and read in full: 'Uploading Route Files' (15402061), 'Routes on Web' (15401971), 'Saved Routes on Web' (15401678), 'Creating Routes on Mobile' (15401660), 'Syncing Strava Routes to Your Garmin Device' (15401810), 'Following a Route' (15401749), 'Run Activity Pages' (15401883), 'What Features Are Included in a Strava Subscription' (15402044), 'Is Strava Free' (15402187)",
+          "Probed live URL behaviour with curl: /routes/new, /athlete/routes, /maps, /maps/create, /upload/select",
+          "Extracted the live route-builder's own English string table from the https://www.strava.com/maps/create page bundle to confirm the GPX upload control exists today and to read its exact button labels and error messages"
+        ],
+        "verdict": "Yes \u2014 a GPX file can be imported directly as a Strava ROUTE (not an activity) through the website's route builder, and this is Strava's own documented feature, not a third-party workaround. It is a manual, browser-only action: Strava's route builder has an \"Upload GPX\" button that ingests the file, draws it as an editable route, and saves it to My Routes. I confirmed this two independent ways: (a) the current support article \"Uploading Route Files\" describes it verbatim; (b) the live route-builder page at strava.com/maps/create ships a UI string table containing \"Upload GPX\" / \"Import GPX\" / \"Choose File\" plus GPX-specific error messages, so the control is present in production today. Two important caveats. First, route creation is a Strava-subscription feature \u2014 Strava's own \"What Features Are Included in a Strava Subscription\" article lists \"Create Routes: Create routes from scratch on the Strava website and the Strava mobile app\" under paid features, so if Luis is on a free account the save may be blocked or degraded (see caveats \u2014 the live bundle's gating is an upsell rather than an obvious hard wall, and I could not verify his account state without calling Strava). Second, the URL has moved: strava.com/routes/new now 301-redirects to strava.com/maps/create. There is NO documented public-API equivalent surfaced anywhere in Strava's help centre \u2014 the website is the path. Mobile app: route creation exists on mobile (Maps tab > Create Route) but the documented mobile builder is tap/draw/sketch only \u2014 no GPX file import on mobile. The GPX import is desktop-web only, and the builder even shows a \"Made for your desktop\" modal on small screens.",
+        "endpoints": [
+          {
+            "method": "GET",
+            "path": "https://www.strava.com/maps/create",
+            "creates": "route (this is the route builder page containing the Upload GPX control)",
+            "documented": "yes",
+            "scopesRequired": "none \u2014 browser session, not the API. Login required to save.",
+            "note": "Browser page, NOT a REST API endpoint. Returns 200 unauthenticated. Its JS bundle contains route_toolbar.upload_gpx = 'Upload GPX', file_upload_modal with 'Import GPX' / 'Choose File' / 'Route Type', and errors including 'Please select only .gpx file types.', 'This GPX file does not contain a sport type. Please select from one of the following options.' and 'This GPX file contains a sport type that is not currently supported by Strava's route builder.' Save dialog offers Route name (required), visibility Everyone/Only You, and a 'Star Route' toggle footnoted 'Send your Route to your device (requires a compatible device).'"
+          },
+          {
+            "method": "GET",
+            "path": "https://www.strava.com/routes/new",
+            "creates": "route",
+            "documented": "undocumented-but-observed",
+            "scopesRequired": "n/a",
+            "note": "LEGACY URL. Verified: returns HTTP 301 redirecting to https://www.strava.com/maps/create. Any guide or code that hardcodes /routes/new still works via redirect but is out of date."
+          },
+          {
+            "method": "GET",
+            "path": "https://www.strava.com/athlete/routes",
+            "creates": "neither (this is the My Routes listing)",
+            "documented": "yes",
+            "scopesRequired": "logged-in session",
+            "note": "Browser page. Verified: HTTP 307 to /login when unauthenticated. This is the 'My Routes' page the support docs refer to; the Create Route button lives near the top of it."
+          },
+          {
+            "method": "GET",
+            "path": "https://www.strava.com/upload/select",
+            "creates": "activity \u2014 NOT a route",
+            "documented": "yes",
+            "scopesRequired": "logged-in session",
+            "note": "This is the trap. The generic file-upload page creates an ACTIVITY from a GPX, i.e. it records a run Luis has not done. Do not use it for this task. Verified: HTTP 301 to /login when unauthenticated."
+          },
+          {
+            "method": "n/a",
+            "path": "Strava public REST API (developers.strava.com)",
+            "creates": "neither",
+            "documented": "no",
+            "scopesRequired": "n/a",
+            "note": "Nothing in Strava's current help centre documents an API route-creation endpoint. The documented POST /uploads path (already used by rocket/src/lib/strava.ts) creates activities. From this angle I found no evidence a public API can create a route; another angle should confirm against developers.strava.com directly."
+          }
+        ],
+        "manualPath": "EXACT PATH (desktop web browser, logged in as Luis):\n\n1. Go to https://www.strava.com/maps/create  \u2014 or, following the support article's own wording: from the top navigation bar click \"Dashboard\" > \"My Routes\" (https://www.strava.com/athlete/routes), then click the \"Create New Route\" / \"Create Route\" button near the top of that page. A third equivalent entry point: the \"+\" icon in the top-right of the header > \"Create route\".\n2. In the route builder, click the \"Upload GPX\" button in the floating route toolbar on the map (the same toolbar holds Reverse Route / Undo / Redo / Clear / Save Route).\n3. In the \"Import GPX\" modal, click \"Choose File\" and pick the file \u2014 /private/tmp/claude-501/-Users-luisdeburnay-dev-routr/0f6602a3-b43a-46c6-b392-056cf6dbcf31/scratchpad/route.gpx\n4. If Strava says \"This GPX file does not contain a sport type\", pick one from the \"Route Type\" dropdown in the same modal \u2014 choose Run. (The routr-generated GPX almost certainly has no sport type, so expect this prompt.) Then confirm with \"Import GPX\".\n5. The track loads as an editable route. Optionally adjust waypoints or routing preferences. Then click \"Save Route\".\n6. In the save dialog: enter a \"Route name (required)\", set visibility (\"Everyone\" or \"Only You\" \u2014 \"Only You\" is fine and still syncs to a watch), and toggle \"Star Route\" ON. The dialog's own footnote for that toggle reads \"Send your Route to your device (requires a compatible device)\" \u2014 this star is what triggers the Garmin sync.\n7. Click \"Save to My Routes\".\n\nTHEN, TO GET IT ONTO THE FENIX 8:\n8. One-time only: in Garmin Connect, enable the Courses permission for Strava. Web: https://connect.garmin.com/modern/settings/accountInformation. Mobile: Garmin Connect app > \"More\" tab > Settings > Connected Apps > Strava > enable Courses permission.\n9. The route must be starred/saved (step 6). If it was already starred, un-star it and re-star it \u2014 Strava's docs are explicit that re-starring is what re-triggers a sync.\n10. Sync the watch with the Garmin Connect mobile app (Bluetooth/Wi-Fi) or Garmin Express. The route appears in the Courses folder on the Fenix 8. Route must be under 600 miles.\n\nMOBILE APP (for completeness \u2014 cannot do GPX import): Maps tab > \"Create Route\" (bottom right) > tap points or use the pencil to sketch > Save. Tap/draw only; there is no file picker.\n\nNOTE ON A NON-STRAVA SHORTCUT: since the goal is navigation on a Fenix 8, the GPX can also be dropped straight into Garmin Connect as a Course (Garmin Connect > Training & Planning > Courses > Import), bypassing Strava entirely and bypassing any Strava subscription question. Out of scope for this angle but worth flagging to whoever acts on this.",
+        "subscriptionRequired": "Almost certainly YES for saving the route, and this is the single biggest risk to the plan. Strava's current article \"What Features Are Included in a Strava Subscription\" lists under \"Route Exploration\": \"Create Routes: Create routes from scratch on the Strava website and the Strava mobile app.\" Both route-builder articles open with the same gate \u2014 \"Routes on Web\": \"With a Strava subscription, you can create new routes from scratch by clicking the 'Create Route' button near the top of the My Routes page.\" \"Creating Routes on Mobile\": \"With a Strava subscription, you can build new routes from scratch on the Strava mobile app.\"\n\nWhat a FREE account definitely still gets: recording and uploading activities (Strava's \"Is Strava Free\" article: \"Yes, Strava is a free app, and there is no cost to record and share your activities\"); starring other athletes' public routes; viewing and following routes; exporting any public route as GPX or TCX; syncing starred routes to a Garmin.\n\nThe honest uncertainty: the \"Uploading Route Files\" article itself does NOT mention a subscription, and the live builder bundle's paywall for this area is a soft \"Customize this route \u2014 Get all our route planning tools with a Strava subscription\" upsell attached to the SAVE modal (with \"Not right now\" / \"Subscribe\" buttons) rather than an obvious hard block on the builder. That leaves open the possibility that a free user can import and save a GPX-derived route while being denied the planning preferences (elevation/surface/popularity bias). I could not resolve this without touching Luis's account, which the brief forbids. Whoever acts on this should check his subscription state first \u2014 either by looking at his Strava profile for the subscriber badge, or by calling the Strava MCP server's read-only `eligibility` tool, which I deliberately did not call.",
+        "caveats": [
+          "I could not run a single WebSearch \u2014 this session's 200-call web search budget was already spent before I was spawned. Everything here is from Strava's own current documentation and live production page source, which is arguably better evidence than search results, but it means I did not sweep for recent third-party reports of the feature breaking or changing.",
+          "Strava's help centre has MIGRATED off Zendesk. Every legacy support.strava.com/hc/en-us/articles/NNNNNN URL now 404s, as does the Zendesk help-centre search API. This is the direct cause of stale guidance on this topic: most blog posts and older AI answers cite dead Strava URLs and therefore cannot be re-verified. Current URLs are of the form https://support.strava.com/en-us/articles/<id>-<slug>.",
+          "strava.com/routes/new is a legacy URL \u2014 verified 301 to strava.com/maps/create. The live URL changed; anything hardcoding the old one should be updated even though the redirect currently works.",
+          "SUBSCRIPTION GATE UNRESOLVED. Docs say route creation is paid; the live bundle's gating reads as a soft save-time upsell. I did not verify Luis's subscription status because the brief forbade calling Strava. This must be checked before anyone promises the click-path will work.",
+          "I did not log in, so I have not seen the Upload GPX button with my own eyes \u2014 I inferred its presence from the production page's own string table (route_toolbar.upload_gpx = 'Upload GPX') plus the matching support article. That is strong but not visual confirmation.",
+          "The 'create route from an activity' path EXISTS but is thinly documented. Strava's 'Run Activity Pages' article says of the activity map: 'The map display features all the functions you should be used to: the ability to zoom and go full screen, change the display type, and create a route for your activity.' No article gives its exact click-path or button label. This is the path many third-party guides describe when they say 'GPX to route is possible' \u2014 upload GPX as an activity, then convert the activity to a route. It is IRRELEVANT AND WRONG HERE: it would require first recording a 6.06 km run Luis has not done, which the brief explicitly rules out. Flagging it only so nobody rediscovers it and thinks it is the answer.",
+          "Sport type: the routr-generated GPX (creator 'Routr', single <trk>, no Strava sport extension) will very likely trigger the builder's 'This GPX file does not contain a sport type' prompt. That is normal and handled in-modal by picking Run \u2014 not a failure.",
+          "Fenix 8 compatibility: Strava's criterion is 'Any Garmin device that supports Courses.' The Fenix 8 supports Courses, so it qualifies. I did not fetch Garmin's own Fenix 8 spec page to double-confirm.",
+          "The Strava Routes Connect IQ app is DEAD. Strava's Garmin article states: 'It is no longer supported and will be removed from the Garmin ConnectIQ app store.' Sync now runs through the native Garmin Connect Courses permission instead. Any guide telling Luis to install a Connect IQ app is out of date. No subscription is documented as required for the sync step itself \u2014 the paywall, if any, sits on creating the route in the first place.",
+          "I made no file modifications and called no Strava API endpoint. The only network activity was unauthenticated GETs of public Strava support articles and public marketing/builder pages."
+        ],
+        "sources": [
+          "https://support.strava.com/en-us/articles/15402061-uploading-route-files",
+          "https://support.strava.com/en-us/articles/15401971-routes-on-web",
+          "https://support.strava.com/en-us/articles/15401678-saved-routes-on-web",
+          "https://support.strava.com/en-us/articles/15401660-creating-routes-on-mobile",
+          "https://support.strava.com/en-us/articles/15401810-syncing-strava-routes-to-your-garmin-device",
+          "https://support.strava.com/en-us/articles/15401749-following-a-route",
+          "https://support.strava.com/en-us/articles/15401883-run-activity-pages",
+          "https://support.strava.com/en-us/articles/15402044-what-features-are-included-in-a-strava-subscription",
+          "https://support.strava.com/en-us/articles/15402187-is-strava-free",
+          "https://support.strava.com/en-us/collections/19657604-segments-and-routes",
+          "https://www.strava.com/maps/create",
+          "https://www.strava.com/routes/new",
+          "https://www.strava.com/athlete/routes",
+          "https://www.strava.com/upload/select",
+          "https://connect.garmin.com/modern/settings/accountInformation"
+        ]
+      },
+      "verification": {
+        "angle": "Adversarial verification of the \"Strava website and mobile app import path\" findings \u2014 checked against the current official Strava Swagger/OpenAPI reference (developers.strava.com/swagger/swagger.json), the current Strava help centre, and the live production route-builder bundle at strava.com/maps/create. Independent re-derivation, not a re-read of the other agent's sources.",
+        "checks": [
+          {
+            "claim": "No public Strava API endpoint creates a route (no POST /routes); the API's route surface is read-only.",
+            "verdict": "CONFIRMED",
+            "note": "Downloaded the current official spec: curl https://developers.strava.com/swagger/swagger.json (HTTP 200, 97,967 bytes) and enumerated every path. Complete route surface is GET /athletes/{id}/routes, GET /routes/{id}, GET /routes/{id}/export_gpx, GET /routes/{id}/export_tcx, GET /routes/{id}/streams. The only POSTs in the entire API are POST /activities and POST /uploads, both of which create ACTIVITIES. There is no POST /routes, no PUT /routes, no route import endpoint. The other agent hedged this as 'from this angle I found no evidence' and asked another angle to confirm against developers.strava.com \u2014 confirmed, and it is stronger than they stated: it is a definitive absence in the authoritative machine-readable spec, not an unverified gap."
+          },
+          {
+            "claim": "https://www.strava.com/routes/new is a legacy URL that 301-redirects to https://www.strava.com/maps/create",
+            "verdict": "CONFIRMED",
+            "note": "curl -s -o /dev/null -w '%{http_code} %{redirect_url}' returned exactly: 301 -> https://www.strava.com/maps/create. Independently reproduced."
+          },
+          {
+            "claim": "strava.com/maps/create returns 200 unauthenticated; /athlete/routes returns 307 to /login; /upload/select returns 301 to /login",
+            "verdict": "CONFIRMED",
+            "note": "All three reproduced exactly: /maps/create 200, /athlete/routes 307 -> /login, /upload/select 301 -> /login."
+          },
+          {
+            "claim": "The live route-builder bundle contains route_toolbar.upload_gpx = 'Upload GPX' plus an Import GPX modal with 'Choose File', 'Route Type', and GPX-specific error strings",
+            "verdict": "CONFIRMED",
+            "note": "Fetched the live page (556,733 bytes) and grepped its embedded string table. Found verbatim: \"route_toolbar\":{\"upload_gpx\":\"Upload GPX\",\"reverse\":\"Reverse Route\",\"undo\":\"Undo\",\"redo\":\"Redo\",\"clear\":\"Clear\",\"save_route\":\"Save Route\"} and \"file_upload_modal\":{\"file\":\"File\",\"route_type\":\"Route Type\",\"choose_file\":\"Choose File\",\"import_gpx\":\"Import GPX\",\"cancel\":\"Cancel\",...,\"errors\":{\"gpx_unsupported_route_type\":\"This GPX file contains a sport type that is not currently supported by Strava's route builder...\",\"gpx_missing_route_type\":\"This GPX file does not contain a sport type. Please select from one of the following options.\",\"unsupported_file_type\":\"Please select only .gpx file types.\"}}. Every quoted string is accurate to the character."
+          },
+          {
+            "claim": "The save dialog offers 'Route name (required)', Everyone/Only You visibility, 'Save to My Routes', and a 'Star Route' toggle footnoted 'Send your Route to your device (requires a compatible device).'",
+            "verdict": "CONFIRMED",
+            "note": "Verbatim from the live bundle: \"route_save_modal\":{...,\"route_name_required\":\"Route name (required)\",\"route_visibility\":\"Route visibility\",\"save_to_my_routes\":\"Save to My Routes\",...,\"privacy_controls\":{\"label\":\"Privacy Controls\",\"everyone\":\"Everyone\",\"only_you\":\"Only You\"},\"star_route\":\"Star Route\",\"star_route_footnote\":\"Send your Route to your device (requires a compatible device).\"}. Also confirmed the 'Made for your desktop' small-screen modal: \"small_screen_modal\":{\"header\":\"Made for your desktop\",\"details\":\"Building routes works best on larger screens...\"}."
+          },
+          {
+            "claim": "The builder's paywall for this area is a soft save-time upsell ('Customize this route' / 'Get all our route planning tools with a Strava subscription') with 'Not right now' and 'Subscribe' buttons, not an obvious hard block",
+            "verdict": "CONFIRMED",
+            "note": "Verbatim in the live bundle, nested directly inside route_save_modal: \"customize_route_upsell\":{\"title\":\"Customize this route\",\"body\":\"Get all our route planning tools with a Strava subscription \u2013 find flat or hilly options, see nearby segments, discover roads and trails, and more.\",\"actions\":{\"dismiss\":\"Not right now\",\"subscribe\":\"Subscribe\"}}. The other agent's careful hedge here is correct and well-evidenced. Note the upsell body names only the PLANNING tools (gradient/segments/discovery), not saving \u2014 which mildly favours the reading that a free account can still save an imported GPX. Still not proof."
+          },
+          {
+            "claim": "The support article 'Uploading Route Files' documents GPX-to-Route via Dashboard > My Routes > Create New Route, and does NOT mention a subscription",
+            "verdict": "CONFIRMED",
+            "note": "Fetched https://support.strava.com/en-us/articles/15402061-uploading-route-files live. It states: 'You can create a Strava route from a GPX file by selecting Dashboard from the top navigation menu on the Strava website, then My Routes > Create New Route.' GPX is the only format named. No subscription language anywhere in the article \u2014 the other agent's caveat is accurate."
+          },
+          {
+            "claim": "Strava's own docs list route creation as a subscription feature",
+            "verdict": "CONFIRMED",
+            "note": "https://support.strava.com/en-us/articles/15402044 lists under Route Exploration, verbatim: 'Create Routes: Create routes from scratch on the Strava website and the Strava mobile app.' And https://support.strava.com/en-us/articles/15401971-routes-on-web opens: 'With a Strava subscription, you can create new routes from scratch by clicking the Create Route button near the top of the My Routes page.' Both quotes accurate. The subscription risk the other agent flagged as the biggest threat to the plan is real and correctly characterised as unresolved."
+          },
+          {
+            "claim": "Mobile app route creation is tap/draw only \u2014 no GPX file import",
+            "verdict": "CONFIRMED",
+            "note": "https://support.strava.com/en-us/articles/15401660-creating-routes-on-mobile describes exactly three methods \u2014 tap the map to add points, pencil icon to trace with a finger, and Manual Mode for straight point-to-point lines. Zero mention of file import. Corroborated by the desktop builder's own 'Made for your desktop' modal, which redirects phone users to the app's Routes feature rather than to a mobile importer."
+          },
+          {
+            "claim": "Garmin sync requires the Courses permission in Garmin Connect plus starring/saving the route; the Strava Routes Connect IQ app is dead; 600-mile limit",
+            "verdict": "CONFIRMED",
+            "note": "https://support.strava.com/en-us/articles/15401810 confirms all four points verbatim: 'For a route to sync to your Garmin device, the route will have to be starred or saved'; Courses permission enabled on Garmin Connect's Account Information page (web) or Settings > Connected Apps > Strava (mobile); of the Connect IQ app, 'It is no longer supported and will be removed from the Garmin ConnectIQ app store'; and 'Ensure your route is less than 600 miles long'. The article does not mention a subscription for the sync step \u2014 the other agent stated this correctly."
+          },
+          {
+            "claim": "'Strava's help centre has MIGRATED off Zendesk. EVERY legacy support.strava.com/hc/en-us/articles/NNNNNN URL now 404s'",
+            "verdict": "WRONG",
+            "note": "Overstated \u2014 this is the only factual error I found, and it is minor. The migration is real and the new URL form is right, but legacy URLs do not uniformly 404: https://support.strava.com/hc/en-us/articles/216918437 returns 301 -> https://support.strava.com/en-us/articles/15401919-exporting-your-data-and-bulk-export, i.e. Strava kept redirect mappings for at least some legacy articles. A different legacy id (360049704431) did return 404. Correct statement: legacy Zendesk URLs are inconsistently mapped \u2014 some redirect, some 404. Does not affect any operational conclusion."
+          },
+          {
+            "claim": "The generic /upload/select page creates an ACTIVITY from a GPX and is the trap to avoid",
+            "verdict": "CONFIRMED",
+            "note": "Correct in substance and correctly flagged as out of bounds for this task. Reinforced by the API side: POST /uploads in the official spec is titled 'Upload Activity' and creates activities. The other agent's 'create route from an activity' caveat is also right to be dismissed \u2014 it requires first fabricating a run Luis has not done."
+          },
+          {
+            "claim": "Fenix 8 qualifies because Strava's criterion is 'any Garmin device that supports Courses'",
+            "verdict": "UNVERIFIABLE",
+            "note": "The Strava-side criterion is confirmed from the article, and the other agent honestly flagged that they did not check Garmin's own Fenix 8 spec page. I did not either \u2014 it is a Garmin fact, out of scope for a Strava-docs verification, and low risk (Courses is standard across the fenix line)."
+          }
+        ],
+        "inventedEndpoints": [],
+        "missed": [
+          "GEOMETRY FIDELITY IS UNVERIFIED AND IT MATTERS MOST HERE. The whole point of a routr GPX is its surface-classified line choice. Strava's own article says that after import you 'adjust the waypoints or route preferences' \u2014 which implies the imported track becomes an editable route object, and route objects on Strava are normally snapped to Strava's own routable network. If the builder re-snaps, the saved route may not be the 6.06 km line routr chose. I grepped the live bundle for any snap/follow-roads/preserve-original toggle and found none, so there is no visible user control over this. Nobody should promise Luis the route on his watch is the route routr generated until someone imports it and compares. Cheapest check: after saving, export the route back out and diff it against the source GPX.",
+          "THE EXPORT-BACK VERIFICATION LOOP EXISTS AND WAS NOT MENTIONED. GET /routes/{id}/export_gpx and GET /athletes/{id}/routes are both in the current official spec, so once the route is created by hand it CAN be pulled back programmatically to confirm what Strava actually stored. That is the mechanism for the fidelity check above.",
+          "SCOPE TRAP ON THAT VERIFICATION LOOP. The spec states plainly: '/routes/{id}/export_gpx ... Requires read_all scope for private routes' and '/athletes/{id}/routes ... Private routes are filtered out unless requested by a token with read_all scope.' Luis's stored token has read, activity:write, activity:read_all \u2014 it does NOT have read_all. So if he saves the route as 'Only You' (which the other agent recommended), the existing token cannot see or export it at all; it would need a re-auth adding read_all. Save as 'Everyone', or re-auth, or skip the check. The findings' scope column said 'none \u2014 browser session', which is right for the click-path but silently misses this downstream consequence.",
+          "THE SUBSCRIPTION QUESTION IS CHEAPLY RESOLVABLE READ-ONLY AND SHOULD BE THE FIRST ACTION. The connected Strava MCP server exposes get_athlete_profile and eligibility, both read-only. The other agent deliberately did not call them, which respected the brief, but whoever acts next should call one FIRST \u2014 it costs one call and settles the single biggest risk before Luis is sent down a seven-step click path that may dead-end at a paywall.",
+          "MINOR: the Garmin Connect direct-Course-import alternative the findings flagged as an aside deserves promotion, precisely because of the two risks above. Importing the GPX straight into Garmin Connect > Courses sidesteps the subscription question entirely AND avoids any Strava re-snapping of the geometry. If the actual goal is 'this exact line, navigable on the Fenix 8', that path is strictly safer; Strava is the right path only if Luis also wants the route living in his Strava My Routes."
+        ]
+      }
+    },
+    {
+      "key": "alternatives",
+      "title": "Other routes to the same outcome, including Garmin direct",
+      "research": {
+        "angle": "Alternatives to Strava for getting the routr GPX onto the Fenix 8 as a navigable course \u2014 Garmin Connect direct (UI + internal API), other route services, third-party Strava-route tools, and USB/MTP sideloading.",
+        "searchesRun": [
+          "WebSearch budget was already exhausted (200/200) before this subagent ran \u2014 zero WebSearch calls succeeded. All research done via WebFetch, GitHub code search (gh api search/code), and local filesystem inspection.",
+          "gh search code: \"course-service/course\"",
+          "gh api search/code: \"course-service/course/import\"",
+          "gh api search/code: \"messageType\" \"courses\" garmin",
+          "gh api search/code: \"device-message\" garmin",
+          "gh api search/code: \"GARMIN/NewFiles\" and \"GARMIN/Courses\"",
+          "WebFetch: raw.githubusercontent.com/cyberjunky/python-garminconnect/master/README.md",
+          "WebFetch: yoricksijsling/route-move garmin/client.py",
+          "WebFetch: jamiemitchellconsultants/RouteTimer docs/garmin-course-spike.md",
+          "WebFetch: jamiemitchellconsultants/RouteTimer garmin-adapter/.../courses.py",
+          "WebFetch: theadzik/repwise docs/garmin-api.md",
+          "WebFetch: Yeetii/strava bruno/garmin-courses/send-garmin-device-messages.bru",
+          "WebFetch: ndeloof/go-garmin pkg/garmin/courses.go",
+          "WebFetch: Likenttt/garmin-mtp-cli README.md",
+          "WebFetch: copperlight.github.io docs/running/garmin-935-navigation.md",
+          "WebFetch: ridewithgps.com/api",
+          "Local: grep of installed garminconnect 0.3.11 source for course/upload/device endpoints",
+          "Local: /Users/luisdeburnay/dev/rocket/docs/specs/05-integrations.md and 07-wiring-todo.md",
+          "Local: search for garth/garminconnect token stores on this machine"
+        ],
+        "verdict": "Skip Strava entirely for this goal. The shortest path to a navigable 6.06 km course on the Fenix 8 is Garmin Connect's own GPX-to-course import \u2014 roughly four clicks in a browser, free, no subscription, and the course reaches the watch over Garmin's normal sync. If it needs to be automated, the same thing is a documented-by-reverse-engineering two-call internal API (POST /course-service/course/import to parse the GPX, POST /course-service/course to save it), plus an optional third call to force it onto the watch immediately. Two hard corrections to the brief's premises: (1) python-garminconnect has ZERO course support \u2014 I grepped the installed 0.3.11 source (3743 lines) and there is no upload_course, no get_courses, no /course-service string anywhere; you would use its generic self.client.post(\"connectapi\", path, json=...) escape hatch, which is exactly how its own push_workout_to_device is built. (2) There is NO working authenticated Garmin session on this machine \u2014 no ~/.garminconnect, no ~/.garth, no token JSON anywhere under $HOME, and rocket's own docs/specs/07-wiring-todo.md still lists \"[ ] Garmin: one-time interactive auth (MFA) on the server\" as unticked. The only Garmin artefact present is a GDPR data-export zip at /Users/luisdeburnay/garmin-export/2026-09-08/. So the \"automated\" path costs an interactive MFA login first, which is most of the effort the manual path would have cost anyway. Hence: for a single 6 km route, do it in the browser. The other services (RideWithGPS, Komoot, plotaroute) all add an account and a sync hop to reach the same Garmin Connect course, so they are strictly worse here. USB/MTP sideloading is the worst option on macOS \u2014 the Fenix 8 speaks MTP, which Finder cannot mount, and GARMIN/Courses wants a FIT course file, not the GPX you have.",
+        "endpoints": [
+          {
+            "method": "POST",
+            "path": "https://connect.garmin.com/course-service/course/import (older code uses the /modern/proxy/ or /gc-api/ prefix; the bare path is what garminconnect's connectapi helper takes)",
+            "creates": "neither \u2014 it is a parse-only step. It accepts a multipart upload (field name \"file\", tuple (filename, bytes, \"application/octet-stream\"), header nk: NT) and returns a course skeleton containing a geoPoints array of {latitude, longitude, elevation}. It does NOT persist anything; RouteTimer's spike notes it returns geoPoints \"but no distance, bounding box, or start point\".",
+            "documented": "undocumented-but-observed",
+            "scopesRequired": "None in the OAuth sense \u2014 this is not the Garmin developer API. It rides a logged-in Garmin Connect web session (Bearer token from python-garminconnect's mobile SSO flow, or a browser SESSION cookie). Garmin's official Connect Developer Program is a separate thing and, per rocket's own integration spec, \"rejects personal-use applications\".",
+            "note": "Confirmed in 8+ independent OSS implementations across Python, Go, C#, JS. Step 1 of 2."
+          },
+          {
+            "method": "POST",
+            "path": "https://connect.garmin.com/course-service/course",
+            "creates": "route \u2014 this is the Garmin analogue of a Strava Route. Returns the saved course with a courseId, visible at https://connect.garmin.com/modern/course/<courseId>.",
+            "documented": "undocumented-but-observed",
+            "scopesRequired": "Same logged-in Garmin Connect session as above.",
+            "note": "JSON body. Keys seen consistently across implementations: courseName, description, activityTypePk (1 = running), distanceMeter, elevationGainMeter, elevationLossMeter, geoPoints, coursePoints, startPoint, boundingBox {lowerLeft, upperRight}, courseLines, sourceTypeId: 3 (meaning GPX-sourced), rulePK: 2 (private). The caller must compute distance (haversine over geoPoints) and the bounding box itself \u2014 the import step does not supply them. That arithmetic is the only real work in the whole automated path."
+          },
+          {
+            "method": "POST",
+            "path": "https://connect.garmin.com/device-service/devicemessage/messages",
+            "creates": "neither \u2014 queues an already-saved course for delivery to a specific watch.",
+            "documented": "undocumented-but-observed",
+            "scopesRequired": "Same logged-in Garmin Connect session.",
+            "note": "Body MUST be a JSON array, not a bare object \u2014 repwise's notes record that a bare object returns HTTP 500 and PUT returns 405. Course payload: [{\"deviceId\": <userDeviceId>, \"messageUrl\": \"course-service/course/fit/<courseId>\", \"messageType\": \"courses\", \"messageName\": \"<course name>\", \"groupName\": null, \"priority\": 1, \"fileType\": \"FIT\", \"metaDataId\": <courseId>}]. Yeetii/strava's variant appends /<deviceId>?elevation=true to messageUrl. deviceId is required \u2014 there is no broadcast form; get it from garminconnect's get_device_last_used()[\"userDeviceId\"]. This is OPTIONAL: courses normally sync to the watch on their own via the Garmin Connect phone app. It only buys you immediacy."
+          },
+          {
+            "method": "GET",
+            "path": "https://connect.garmin.com/course-service/course/fit/<courseId>",
+            "creates": "neither \u2014 downloads the course as a FIT course file.",
+            "documented": "undocumented-but-observed",
+            "scopesRequired": "Same logged-in Garmin Connect session.",
+            "note": "Relevant only to the USB path: this is where you would get a real FIT course file to drop into GARMIN/Courses. Note the chicken-and-egg \u2014 you need the course to exist in Garmin Connect first, at which point USB is pointless. A GPX sibling exists at /course-service/course/gpx/<courseId>."
+          },
+          {
+            "method": "POST",
+            "path": "https://connect.garmin.com/upload-service/upload/<ext> (python-garminconnect: upload_activity(), garmin_connect_upload = \"/upload-service/upload\")",
+            "creates": "activity \u2014 NOT a route. This is the trap.",
+            "documented": "undocumented-but-observed",
+            "scopesRequired": "Same logged-in Garmin Connect session.",
+            "note": "Called out explicitly as the thing to avoid. python-garminconnect's ActivityUploadFormat enum accepts FIT, GPX and TCX, so upload_activity(\"route.gpx\") will happily succeed \u2014 and log a run Luis has not done, on Garmin, which then re-exports to Strava. Same wrong outcome as the Strava /uploads endpoint, one system upstream. There is also upload_activity_import() which the library documents as \"not re-exported to third parties like Strava\", but it still creates an activity, so it is still wrong."
+          },
+          {
+            "method": "GET",
+            "path": "https://ridewithgps.com/api (Routes, Trips, Collections resources)",
+            "creates": "route",
+            "documented": "yes",
+            "scopesRequired": "\"An API client is required for all API requests\" \u2014 you register a client against your account. The docs page did not state whether approval is automatic or gated; it points questions at developers@ridewithgps.com.",
+            "note": "A real, publicly documented API with a Routes resource \u2014 the only alternative service here with genuinely open docs. But I could NOT confirm from the docs page that it accepts a GPX upload to create a route, and it still leaves you needing a RideWithGPS-to-Garmin sync hop. Strictly more work than talking to Garmin directly. Komoot has no public developer site at all (developer.komoot.com does not resolve) \u2014 its API is partner-only."
+          }
+        ],
+        "manualPath": "Garmin Connect web, GPX to course, then to the watch. On connect.garmin.com signed in: left sidebar \"Training & Planning\" (older layout: \"Training\") -> \"Courses\" -> the \"Import\" button on the Courses page -> choose /private/tmp/claude-501/-Users-luisdeburnay-dev-routr/0f6602a3-b43a-46c6-b392-056cf6dbcf31/scratchpad/route.gpx -> Garmin parses it and opens the course editor with the 6.06 km line drawn -> set the activity type to Running and give it a name -> Save. The course now exists under My Courses. To get it to the Fenix 8: open the saved course and use \"Send to Device\" (picks the watch by name), or simply leave it \u2014 courses sync automatically the next time the Garmin Connect phone app talks to the watch. On the watch it appears under Run -> Navigation -> Courses. CAVEAT ON THIS PATH: the endpoint mechanics above are all verified against live third-party source code, but these exact UI labels are from model knowledge, NOT verified this session \u2014 support.garmin.com returned HTTP 403 to every fetch and the WebSearch budget was gone. The shape is right (a Courses page with an Import control, and a per-course Send to Device action, both corroborated by the /course-service/course/import and /device-service/devicemessage/messages endpoints existing and by community write-ups); the button wording may differ slightly in the current Connect redesign.",
+        "subscriptionRequired": "None, for the recommended path. Garmin Connect course creation, GPX import, unlimited courses and device sync are all free \u2014 there is no Garmin subscription product gating them. This is the single biggest advantage over Strava, where route creation is a paid-subscription feature. On the alternatives: plotaroute is free (ad-supported) with a free Garmin Connect send; Komoot's route planning is free but its API is partner-only; RideWithGPS route creation is free but its automatic Garmin Connect sync has historically been a paid-tier feature (NOT verified this session \u2014 treat as unconfirmed). The Garmin official Connect Developer Program is not a subscription question at all: per rocket/docs/specs/05-integrations.md it \"rejects personal-use applications\", so it is simply unavailable, which is why every project in this space uses the internal endpoints.",
+        "caveats": [
+          "RANKED ANSWER. (1) Garmin Connect web import \u2014 works, free, ~4 clicks, reaches the watch, no code, no ToS grey area. Do this. (2) Garmin internal API, two POSTs plus an optional device push \u2014 works, free, zero manual steps ONCE authenticated, reaches the watch; but needs an interactive MFA login first that does not currently exist, plus haversine/bounding-box code, so it only pays off if routr is going to publish many routes. (3) plotaroute or RideWithGPS \u2014 works, free-ish, but adds an account and a sync hop to arrive at the same Garmin course; no reason to pick it. (4) USB/MTP sideload \u2014 worst on macOS, see below. (5) Strava route \u2014 no public route-creation API exists (that is another agent's angle to confirm), and even a route created by hand still has to sync onward to Garmin, so Strava is a detour whichever way you cut it.",
+          "USB SIDELOAD IS A TRAP ON THIS MACHINE, for two compounding reasons. First, format: GARMIN/Courses expects a FIT course file, not GPX \u2014 the community write-up I checked explicitly converts TCX to FIT before copying, and the only clean way to get a Garmin-shaped course FIT is to download it from /course-service/course/fit/<courseId>, which means the course already exists in Garmin Connect and you have already won without the cable. Second, transport: the Fenix 8 exposes MTP, not USB mass storage, so macOS Finder will not mount it \u2014 you would need Android File Transfer, Garmin Express, or a libmtp CLI (Likenttt/garmin-mtp-cli), and that tool's own README warns MTP access fails if Garmin Express or Android File Transfer has already claimed the device. Dropping a raw GPX into GARMIN/NewFiles is a different mechanism (the watch ingests it on next boot) and does not reliably produce a turn-by-turn navigable course. Not worth it for one route.",
+          "BRIEF CORRECTION 1 \u2014 python-garminconnect has no course support whatsoever. I grepped the installed 0.3.11 source at /Users/luisdeburnay/.cache/uv/archive-v0/syMHtuTbpQZT3rF8lAcPU/garminconnect/ (__init__.py, client.py, typed.py, workout.py, fit.py, exercises.py): zero hits for 'course' or '/course-service', case-insensitive, across every file. The upstream README on GitHub master confirms the same \u2014 courses are absent from its feature list, which covers activities, workouts, scheduling and push-to-device but nothing route-shaped. The escape hatch is real though: client.py exposes connectapi(path), request(method, domain, path), post(domain, path) and download(path), and the library's own push_workout_to_device is built on exactly self.client.post(\"connectapi\", url, json=payload, api=True). So course support is ~40 lines of caller code on top of the existing auth, not a fork.",
+          "BRIEF CORRECTION 2 \u2014 the 'working authenticated session' does not exist on this machine. No ~/.garminconnect, no ~/.garth, no ~/.config/garth, and no oauth1_token.json/oauth2_token.json anywhere under $HOME. rocket/docs/specs/07-wiring-todo.md still has Garmin sync as unstarted milestone M3 with '[ ] Garmin: one-time interactive auth (MFA) on the server; durable token volume' unticked. The only Garmin artefact present is a GDPR export zip at /Users/luisdeburnay/garmin-export/2026-09-08/ \u2014 data, not a session. Whoever acts on these findings should budget for a first interactive MFA login before any API path works.",
+          "STABILITY WARNING, from Luis's own notes and worth repeating. rocket/docs/specs/05-integrations.md records that Garmin's March 2026 auth change killed the garth library outright (deprecated) and added Cloudflare TLS fingerprinting that blocks plain HTTP clients; python-garminconnect 0.3.x only survived by rebuilding native auth with curl_cffi TLS impersonation. Its own guidance: 'Pin the library version; subscribe to its GitHub issues; expect breakage on Garmin's timetable, not ours.' Anything built on /course-service inherits that fragility. A four-click browser import does not.",
+          "ACCOUNT-RISK QUESTION, answered honestly. The internal endpoints are undocumented and outside Garmin's developer terms. I found no evidence of anyone reporting a ban for using them \u2014 the ecosystem is large and long-lived (mapmyrun-to-garmin, route-move, gccli, go-garmin, garmin_mcp, garmin_sync, and several MCP servers all hit /course-service, some for years) \u2014 but absence of reports is not a guarantee, and I could not check Garmin's current ToS text this session. The realistic risk is not a ban, it is silent breakage: Garmin changes the path prefix periodically, which is visible in the wild as /modern/proxy/course-service/..., /app/proxy/course-service/..., /gc-api/course-service/... and the bare /course-service/... all appearing across the projects I read, each correct at a different point in time.",
+          "UNVERIFIED, flagged so nobody treats it as checked: the exact Garmin Connect UI wording (support.garmin.com returned 403 on every attempt); the RideWithGPS Garmin-sync subscription tier; whether the RideWithGPS API accepts GPX for route creation; whether Strava routes auto-push to a connected Garmin. The endpoint paths, payload keys and multipart field names ARE verified \u2014 each is quoted from live third-party source, and the important ones are corroborated across at least three independent codebases in different languages."
+        ],
+        "sources": [
+          "https://raw.githubusercontent.com/cyberjunky/python-garminconnect/master/README.md",
+          "https://raw.githubusercontent.com/yoricksijsling/route-move/master/garmin/client.py",
+          "https://raw.githubusercontent.com/jamiemitchellconsultants/RouteTimer/main/docs/garmin-course-spike.md",
+          "https://raw.githubusercontent.com/jamiemitchellconsultants/RouteTimer/main/garmin-adapter/src/routetimer_garmin/courses.py",
+          "https://raw.githubusercontent.com/theadzik/repwise/main/docs/garmin-api.md",
+          "https://raw.githubusercontent.com/Yeetii/strava/main/bruno/garmin-courses/send-garmin-device-messages.bru",
+          "https://raw.githubusercontent.com/Yeetii/strava/main/Shared/Services/GarminClient/GarminCoursesApi.cs",
+          "https://raw.githubusercontent.com/ndeloof/go-garmin/main/pkg/garmin/courses.go",
+          "https://raw.githubusercontent.com/Likenttt/garmin-mtp-cli/main/README.md",
+          "https://raw.githubusercontent.com/copperlight/copperlight.github.io/master/docs/running/garmin-935-navigation.md",
+          "https://ridewithgps.com/api",
+          "https://github.com/Taxuspt/garmin_mcp (src/garmin_mcp/courses.py \u2014 via gh code search)",
+          "https://github.com/bpauli/gccli (internal/garminapi/courses.go \u2014 via gh code search)",
+          "https://github.com/llehouerou/go-garmin (service_course.go, endpoint/definitions/courses.go \u2014 via gh code search)",
+          "https://github.com/blaskovicz/mapmyrun-to-garmin (garmin/client.go, check.sh \u2014 via gh code search)",
+          "https://github.com/CPlusPlus17/FitnessJournal (src/garmin_api.rs \u2014 via gh code search)",
+          "https://github.com/camathieu/garmin-gpx-downloader (via gh code search)",
+          "https://github.com/Nyeng/garmin-treningsdagbok (push-loype.js \u2014 via gh code search)",
+          "file:///Users/luisdeburnay/.cache/uv/archive-v0/syMHtuTbpQZT3rF8lAcPU/garminconnect/__init__.py",
+          "file:///Users/luisdeburnay/.cache/uv/archive-v0/syMHtuTbpQZT3rF8lAcPU/garminconnect/client.py",
+          "file:///Users/luisdeburnay/dev/rocket/docs/specs/05-integrations.md",
+          "file:///Users/luisdeburnay/dev/rocket/docs/specs/07-wiring-todo.md"
+        ]
+      },
+      "verification": {
+        "angle": "Garmin-direct and other non-Strava routes to a navigable course on the Fenix 8 \u2014 verification pass against live third-party source, the current Strava API reference, and this machine's filesystem.",
+        "checks": [
+          {
+            "claim": "POST /course-service/course/import exists and accepts a multipart file upload, parse-only",
+            "verdict": "CONFIRMED",
+            "note": "Independently present in two live codebases. yoricksijsling/route-move garmin/client.py: `\"https://connect.garmin.com/modern/proxy/course-service/course/import\"`, POST, multipart. ndeloof/go-garmin pkg/garmin/courses.go: `http.MethodPost, \"/course-service/course/import\"`. Not in any official Garmin doc \u2014 the report labels it 'undocumented-but-observed', which is the honest framing. Not invented."
+          },
+          {
+            "claim": "Multipart field name is \"file\", tuple (filename, bytes, \"application/octet-stream\"), with header nk: NT",
+            "verdict": "CONFIRMED",
+            "note": "Verbatim in route-move client.py: `files = {\"file\": (\"my-upload.tcx\", byte_data, \"application/octet-stream\")}` and header `\"nk\": \"NT\"`. This level of detail was the most likely place for a hallucination and it holds exactly."
+          },
+          {
+            "claim": "POST /course-service/course saves the course and returns a courseId \u2014 the Garmin analogue of a Strava Route",
+            "verdict": "CONFIRMED",
+            "note": "route-move: `\"https://connect.garmin.com/modern/proxy/course-service/course/\"` POST JSON. go-garmin: `s.c.Do(ctx, http.MethodPost, \"/course-service/course\", nil, course, &raw)`. Two languages, two authors."
+          },
+          {
+            "claim": "Payload literals sourceTypeId: 3 (GPX-sourced) and rulePK: 2 (private), plus keys courseName, activityTypePk, distanceMeter, elevationGainMeter, startPoint, coursePoints, boundingBox, courseLines, geoPoints",
+            "verdict": "CONFIRMED",
+            "note": "RouteTimer garmin-adapter/.../courses.py build_course_payload() returns exactly those keys, with literals `rulePK: 2`, `sourceTypeId: 3`, `elevationSource: 3`, coordinate systems `\"WGS84\"`. The report understated the payload \u2014 the real dict has ~36 keys including openStreetMap, matchedToSegments, userProfilePk, virtualPartnerId, hasPaceBand, cutoffDuration. Whoever implements this should copy the file, not the report's key list."
+          },
+          {
+            "claim": "The import step returns geoPoints but no distance, bounding box or start point, so the caller must compute them (haversine + bbox)",
+            "verdict": "UNVERIFIABLE",
+            "note": "The claim is quoted accurately from RouteTimer's docs/garmin-course-spike.md \u2014 but that same document states the spike was NOT executed against live Garmin credentials and that manual verification is required before production use. The report cited it as observed behaviour and did not carry that caveat forward. Likely true, unproven."
+          },
+          {
+            "claim": "POST /device-service/devicemessage/messages queues a saved course for a specific watch; body must be a JSON array (bare object \u2192 HTTP 500, PUT \u2192 HTTP 405)",
+            "verdict": "CONFIRMED",
+            "note": "repwise docs/garmin-api.md states exactly `\"POST /device-service/devicemessage/messages\"`, `\"A bare object returns HTTP 500\"`, `\"PUT ... HTTP 405\"`. Mis-sourced, though: repwise documents the WORKOUTS variant only (messageType \"workouts\", messageUrl \"workout-service/workout/FIT/<id>\") and its doc contains no course-service content at all. The courses variant comes from Yeetii and go-garmin, not repwise."
+          },
+          {
+            "claim": "Course device-message payload: messageType \"courses\", messageUrl \"course-service/course/fit/<courseId>\", fileType FIT, metaDataId <courseId>, deviceId required, no broadcast form",
+            "verdict": "CONFIRMED",
+            "note": "Yeetii/strava bruno file verbatim: messageType `\"courses\"`, messageUrl `\"course-service/course/fit/{{courseId}}/3616062752?elevation=true\"`, fileType `\"FIT\"`, metaDataId `{{courseId}}`, deviceId `3616062752`, groupName `null`. go-garmin independently builds `\"messageUrl\": fmt.Sprintf(\"course-service/course/fit/%d\", courseID)`. One trivial slip: Yeetii uses `priority: 0`, the report said 1."
+          },
+          {
+            "claim": "GET /course-service/course/fit/<courseId> downloads the course as a FIT file (with a GPX sibling)",
+            "verdict": "UNVERIFIABLE",
+            "note": "The GPX sibling IS confirmed \u2014 go-garmin has `GET /course-service/course/gpx/%d`. The FIT path appears in go-garmin only as the messageUrl string inside a device message, never as a call anyone makes. Nobody in the sources checked actually downloads a course FIT. It almost certainly works (the watch fetches it), but it is the one path here with no direct caller evidence \u2014 and the USB fallback depends on it."
+          },
+          {
+            "claim": "python-garminconnect has ZERO course support \u2014 no upload_course, no get_courses, no /course-service string",
+            "verdict": "CONFIRMED",
+            "note": "Verified on this machine, not from the README. `grep -ril \"course\"` across /Users/luisdeburnay/.cache/uv/archive-v0/syMHtuTbpQZT3rF8lAcPU/garminconnect/ returns nothing; `grep -rn \"course-service\"` returns nothing. A real correction to the brief, and it holds."
+          },
+          {
+            "claim": "The escape hatch is client.py's connectapi/request/post/download helpers, the same mechanism push_workout_to_device uses",
+            "verdict": "CONFIRMED",
+            "note": "client.py defines `connectapi` (line 1580), `request` (1583), `post` (1587), `download` (1633). Course support is caller-side code on top of existing auth, as claimed."
+          },
+          {
+            "claim": "upload-service/upload creates ACTIVITIES and will happily accept a GPX \u2014 the trap to avoid",
+            "verdict": "CONFIRMED",
+            "note": "__init__.py:571 `self.garmin_connect_upload = \"/upload-service/upload\"`; `upload_activity()` at 2463 gates on `Garmin.ActivityUploadFormat.__members__` (enum at 2834). The warning is correct and worth keeping prominent \u2014 same wrong-outcome failure as Strava's POST /uploads, one system upstream."
+          },
+          {
+            "claim": "There is NO authenticated Garmin session on this machine; rocket still lists Garmin MFA auth as unticked",
+            "verdict": "CONFIRMED",
+            "note": "No ~/.garminconnect, no ~/.garth, no ~/.config/garth; no oauth1_token.json / oauth2_token.json anywhere under $HOME (4 levels deep, Library excluded). rocket/docs/specs/07-wiring-todo.md line 13 verbatim: `- [ ] Garmin: one-time interactive auth (MFA) on the server; durable token volume.` Only Garmin artefact is /Users/luisdeburnay/garmin-export/2026-09-08/. This is the correction that actually changes the recommendation."
+          },
+          {
+            "claim": "Garmin's March 2026 auth change killed garth; python-garminconnect survived via curl_cffi TLS impersonation; the official developer program rejects personal-use applications",
+            "verdict": "CONFIRMED",
+            "note": "rocket/docs/specs/05-integrations.md line 4, quoted accurately including 'The official developer program rejects personal-use applications \u2014 not an option.' Note this is Luis's own note cited back at him, so it corroborates the report's internal consistency, not Garmin's current reality."
+          },
+          {
+            "claim": "Strava has no public route-creation API",
+            "verdict": "CONFIRMED",
+            "note": "developers.strava.com/docs/reference Routes section is read-only: GET /routes/{id}, GET /routes/{id}/gpx, GET /routes/{id}/tcx, GET /athletes/{id}/routes. No POST, no PUT. The only write path is the activity upload. The report hedged this as 'another agent's angle' \u2014 it did not need to hedge, it is correct."
+          },
+          {
+            "claim": "Strava route creation is a paid-subscription feature, unlike Garmin's",
+            "verdict": "CONFIRMED",
+            "note": "strava.com/subscribe lists Routes among subscription benefits and names 'Draw your own Routes' as a subscriber capability, with the free tier limited to 'Try Routes made for you'. Source is marketing copy, not a support article (support.strava.com route-builder article IDs 404 or redirect), so the exact free-tier boundary is softer than the report implies."
+          },
+          {
+            "claim": "Garmin Connect course creation, GPX import and device sync are free \u2014 'there is no Garmin subscription product gating them'",
+            "verdict": "UNVERIFIABLE",
+            "note": "Could not verify \u2014 support.garmin.com refuses fetches and the WebSearch budget is exhausted (200/200) for this session too. The clause is also wrong-shaped: Garmin Connect+ does exist as a paid product. The defensible claim is 'Connect+ does not gate courses', not 'no Garmin subscription product exists'. Conclusion likely right, phrasing overreaches."
+          },
+          {
+            "claim": "RideWithGPS has a publicly documented API with a Routes resource, requires a registered API client, and GPX-to-route creation is unconfirmed",
+            "verdict": "CONFIRMED",
+            "note": "ridewithgps.com/api lists a Routes endpoint and states verbatim 'An API client is required for all API requests', OAuth preferred, Basic supported. It documents no GPX-upload route-create. The report's own caveat is accurate \u2014 unusually, it flagged its own gap correctly."
+          },
+          {
+            "claim": "Garmin Connect web click-path: Training & Planning \u2192 Courses \u2192 Import \u2192 save \u2192 Send to Device",
+            "verdict": "UNVERIFIABLE",
+            "note": "support.garmin.com returned 403 to the prior agent and no search budget remains, so the current UI wording is still unchecked. The report flagged this itself. The shape is corroborated indirectly \u2014 an import endpoint and a per-course device-push endpoint both exist \u2014 but nobody has confirmed the 2026 Connect redesign's labels. Expect to hunt for the button rather than follow the words literally."
+          },
+          {
+            "claim": "USB/MTP sideload is a trap: Fenix 8 is MTP not mass storage, GARMIN/Courses wants FIT not GPX",
+            "verdict": "UNVERIFIABLE",
+            "note": "The chicken-and-egg argument is decisive on its own (you need the course in Connect to get a course FIT, at which point USB is pointless), so the conclusion stands. The MTP-vs-mass-storage claim for the Fenix 8 specifically could not be verified this session."
+          }
+        ],
+        "inventedEndpoints": [
+          "None fabricated. Every endpoint in the report was located in live third-party source code and, for the important ones, corroborated across two or more independent codebases in different languages. Answering the literal schema question honestly: none of the Garmin course/device endpoints appear in ANY official Garmin documentation \u2014 but the report never claimed they did. It marked each 'undocumented-but-observed' and named its sources, which is the correct treatment. This is not the invented-endpoint failure mode.",
+          "Weakest link 1 \u2014 GET /course-service/course/fit/<courseId> as a downloadable FIT course. It appears in the wild only as a messageUrl string inside a device-message payload, never as a call any checked project makes. Not invented, but not caller-verified either, and the USB fallback depends on it.",
+          "Weakest link 2 \u2014 that POST /course-service/course/import accepts GPX. The only source claiming GPX is RouteTimer's spike doc, which states it was never executed against live credentials. route-move, the one project that demonstrably runs, uploads TCX ('my-upload.tcx'). So the GPX-to-import link, the load-bearing first step of the entire automated path, rests on unexecuted code. If it turns out import is TCX-only, the automated path gains a GPX\u2192TCX conversion step."
+        ],
+        "missed": [
+          "POST /course-service/course/elevation \u2014 route-move calls this between import and save, passing an array of elevation tuples. The report omitted it entirely, describing a two-call sequence where the one demonstrably-working implementation uses three. If Garmin expects its own DEM enrichment there, a course saved without it may reach the watch with no elevation profile.",
+          "The rest of the course CRUD surface, from go-garmin: GET /course-service/course (list), GET /course-service/course/{id}, PUT /course-service/course/{id}, DELETE /course-service/course/{id}. Directly relevant if routr publishes repeatedly \u2014 without list/PUT, every re-publish creates a duplicate course. The report pitched the automated path as the many-routes option but gave no idempotency story.",
+          "The report cited RouteTimer's spike as evidence for parse-only import behaviour without carrying forward that document's own warning that it was never run against live Garmin credentials. That caveat matters because the two claims it uniquely supports \u2014 GPX accepted, and distance/bbox computed caller-side \u2014 are exactly the two that set the cost of the automated path.",
+          "Device-message attribution is crossed: the 500/405 mechanics come from repwise (workouts only; its doc contains no course-service content at all), while the courses payload comes from Yeetii and go-garmin. The facts survive, the sourcing does not. Also priority is 0 in Yeetii, not 1.",
+          "'There is no Garmin subscription product gating them' should read 'Garmin Connect+ exists but does not gate courses'. Unverified either way this session, but the absolute phrasing is the kind that ages badly.",
+          "Outside this angle but worth stating once so nobody chases it: the connected Strava MCP server is read-only (eligibility, get_*, list_activities, health) with no write tool of any kind, so it cannot create a Strava route even if the REST API could. Both Strava paths are closed, which strengthens the report's recommendation rather than weakening it.",
+          "Overall: the report's headline recommendation \u2014 do the browser import, skip Strava \u2014 survives verification intact, and both of its corrections to the brief are true. The corrosion is at the edges: one omitted call, no idempotency, and an unexecuted spike quoted as observation."
+        ]
+      }
+    }
+  ]
+}
