@@ -55,4 +55,4 @@ card), `placement.ts` (probably deleted).
 
 ## Commits
 
-(populated as work lands)
+- `da5c078` feat(planner): compose description over placement, and put it on the screen
