@@ -1,7 +1,9 @@
 import Link from 'next/link';
 
 import { BLOCK, RACES } from '../../config/training';
+import { derivePaces } from '../domain/paces';
 import { planWeek } from '../domain/planner/placement';
+import { describeWeek } from '../domain/planner/prescribe';
 import { scoreReadiness } from '../domain/readiness';
 import { postgresStore } from '../domain/store';
 import { blockTotals, weekEnd, weeklyActuals } from '../lib/actuals';
@@ -58,7 +60,17 @@ export default async function Today() {
   ]);
 
   const plan = week === null ? null : planWeek(week);
-  const todaySession = plan?.sessions.find((s) => s.date === today) ?? null;
+  // Placement decides which day and how far; description decides what the
+  // session IS. Until 2026-09-12 the screen showed only the first half of that,
+  // so a "quality" day arrived as a bare word with a distance beside it.
+  const described =
+    week === null || plan === null ? [] : describeWeek(week, plan.sessions);
+  const paces = derivePaces();
+  const todaySession = described.find((s) => s.date === today) ?? null;
+  const todayPace =
+    todaySession && todaySession.zone !== 'rest' && todaySession.zone !== 'race'
+      ? paces[todaySession.zone]
+      : null;
   const yesterdaySession =
     plan?.sessions.find((s) => s.date === yesterday) ?? null;
   const yesterdayActual = runs
@@ -131,7 +143,9 @@ export default async function Today() {
                     'bg-zinc-800 text-zinc-300 ring-zinc-700',
                 ].join(' ')}
               >
-                {todaySession.kind}
+                {todaySession.zone === 'rest'
+                  ? todaySession.kind
+                  : todaySession.zone}
               </span>
               <p className="font-mono text-3xl font-semibold tabular-nums text-zinc-50">
                 {todaySession.km > 0 ? todaySession.km : '—'}
@@ -142,8 +156,38 @@ export default async function Today() {
                 ) : null}
               </p>
             </div>
+            {todayPace ? (
+              <p className="mt-2 font-mono text-sm text-sky-300">
+                {formatPace(todayPace.fastSecPerKm)}&ndash;
+                {formatPace(todayPace.slowSecPerKm)}/km
+                <span className="ml-2 text-zinc-500">
+                  HR{' '}
+                  {todayPace.hr.low === null
+                    ? ''
+                    : `${String(todayPace.hr.low)}\u2013`}
+                  {todayPace.hr.high}
+                  {todayPace.hrGoverns ? ' (heart rate governs)' : ''}
+                </span>
+              </p>
+            ) : null}
+            <p className="mt-2.5 border-t border-zinc-800 pt-2.5 text-sm leading-relaxed text-zinc-300">
+              {todaySession.what}
+            </p>
+            {todaySession.why ? (
+              <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">
+                {todaySession.why}
+              </p>
+            ) : null}
+            {todaySession.strength ? (
+              <p className="mt-2.5 border-t border-zinc-800 pt-2.5 text-sm text-amber-300">
+                Gym: {todaySession.strength}
+                {todaySession.strength === 'legs'
+                  ? ' \u2014 at least 6 h after the run'
+                  : ''}
+              </p>
+            ) : null}
             {todaySession.note ? (
-              <p className="mt-2.5 border-t border-zinc-800 pt-2.5 text-sm leading-relaxed text-zinc-400">
+              <p className="mt-2 text-sm leading-relaxed text-zinc-400">
                 {todaySession.note}
               </p>
             ) : null}

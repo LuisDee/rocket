@@ -31,19 +31,26 @@ card), `placement.ts` (probably deleted).
 
 **Assumptions:**
 
-- `placement.planWeek` is the one to go: it distributes kilometres into
-  availability slots but has no concept of a session's content, which is the
-  thing that was missing. Its slot logic may need lifting into the generator
-  first -- check before deleting.
+- ~~`placement.planWeek` is the one to go~~ **WRONG, and the check caught it.**
+  `planWeek` handles the mandatory rest day, rest-day choice against the
+  PREVIOUS week's hard session, quality spacing, distribution by slot capacity
+  (which is where doubles come from), and a race being additional to the weekly
+  target rather than inside it. My generator got the last of those wrong -- race
+  week came out with a negative easy budget. Deleting `planWeek` would have lost
+  real capability to make a rewrite look justified.
+
+  Resolved the other way: `planWeek` places, `prescribe` describes. The
+  generator's placement logic is deleted; its prescription logic is kept.
 
 ---
 
 ## Checklist
 
-- [ ] read both paths and decide which survives, in writing
-- [ ] generator consumed by `daily-pass.ts`
-- [ ] home screen renders pace band + structure
-- [ ] one planner deleted
+- [x] read both paths and decide which survives, in writing -- see Assumptions
+- [x] `prescribe` rewritten as a decorator over `planWeek`, placement logic deleted
+- [x] home screen renders zone, pace band, HR band, structure, purpose and gym
+- [x] 13 tests, 6 deliberate breakages all caught
+- [ ] consumed by `daily-pass.ts` (the page is done; the cron is not)
 - [ ] cross-surface consistency test
 
 ## Commits

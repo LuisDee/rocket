@@ -30,8 +30,7 @@ the week as generated is unrunnable rather than merely hard.
 
 **Assumptions:**
 
-- ~75 g/h is the target rate, from the World Athletics consensus and Hansen
-  2014. It is the number the evidence supports for a runner of this duration, not
+- ~75 g/h is the target rate, from the World Athletics consensus and Hansen 2014. It is the number the evidence supports for a runner of this duration, not
   the 90-120 g/h figures drawn from cycling studies.
 
 ---
