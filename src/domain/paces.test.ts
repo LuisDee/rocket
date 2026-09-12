@@ -37,27 +37,40 @@ const JULY_HALF: Effort = {
   stoppedSec: 47,
 };
 
+/** Battersea Park Half, 2026-09-12. The anchor. 1:38:58, five seconds stopped. */
+const BATTERSEA: Effort = {
+  date: '2026-09-12',
+  distanceKm: 21.275,
+  timeSec: 5938,
+  stoppedSec: 5,
+};
+
 describe('the derived paces', () => {
-  it('puts threshold at 4:52/km, not the 4:20.9 Garmin reports', () => {
-    // The single most consequential assertion in this file. Garmin's figure is
-    // 2 s/km SLOWER than his best 5.10 km race (4:19/km), so it claims his
-    // 22-minute race pace is sustainable for an hour.
+  it('puts threshold at 4:29/km, re-anchored on the Battersea Half', () => {
+    // Was 4:52 off the July anchor. The 2026-09-12 race moved the anchor 23.5
+    // s/km and every zone with it.
+    //
+    // Note what this does to the Garmin argument. Garmin's 4:20.9 is now 8 s/km
+    // from the derived figure rather than 31, and he ran the last 3 km of the
+    // race at 4:19-4:20. The reasoning that rejected it was sound on July data
+    // -- it really was slower than his 5 km race pace at the time -- but the
+    // conclusion was stated far too strongly. Keeping the field out of ATHLETE
+    // is still right, because a device pace should not drive a prescription;
+    // claiming it was "the most likely way to injure him" was not.
     const t = derivePaces().threshold;
-    expect(formatPace((t.fastSecPerKm + t.slowSecPerKm) / 2)).toBe('4:52');
-    // Garmin's number is 261 s/km. It must sit well outside the band.
-    expect(t.fastSecPerKm).toBeGreaterThan(261 + 20);
+    expect(formatPace((t.fastSecPerKm + t.slowSecPerKm) / 2)).toBe('4:29');
   });
 
-  it('puts marathon pace at 5:28/km with a heart-rate ceiling of 170', () => {
+  it('puts marathon pace at 5:03/km with a heart-rate ceiling of 170', () => {
     const m = derivePaces().marathon;
-    expect(formatPace((m.fastSecPerKm + m.slowSecPerKm) / 2)).toBe('5:28');
+    expect(formatPace((m.fastSecPerKm + m.slowSecPerKm) / 2)).toBe('5:03');
     expect(m.hr.high).toBe(HR_ZONES.marathonCeiling);
   });
 
-  it('bands easy at 6:15-6:52 and lets heart rate govern it', () => {
+  it('bands easy at 5:46-6:19 and lets heart rate govern it', () => {
     const e = derivePaces().easy;
-    expect(formatPace(e.fastSecPerKm)).toBe('6:15');
-    expect(formatPace(e.slowSecPerKm)).toBe('6:51');
+    expect(formatPace(e.fastSecPerKm)).toBe('5:46');
+    expect(formatPace(e.slowSecPerKm)).toBe('6:19');
     // The band is an expected output, not a target: it should get faster across
     // the block at the same heart rate, and that fall is the adaptation signal.
     expect(e.hrGoverns).toBe(true);
@@ -141,18 +154,21 @@ describe('what may become the anchor', () => {
 });
 
 describe('normalising and predicting', () => {
-  it('normalises 21.14 km to the half distance without changing pace much', () => {
-    const pace = normalisedPaceSecPerKm(JULY_HALF);
+  it('normalises the race distance to the half without changing pace much', () => {
+    // The anchor is now the race itself, so normalising it must reproduce the
+    // stored figure. 21.275 km measured against a 21.0975 km course is the
+    // usual GPS overshoot, not a long course.
+    const pace = normalisedPaceSecPerKm(BATTERSEA);
     expect(pace).toBeCloseTo(PACE_ANCHOR.normalisedPaceSecPerKm, 0);
   });
 
-  it('reproduces his actual marathon from his measured exponent', () => {
-    // NOTE this is partly circular: `RIEGEL.measured` was FITTED from these two
-    // races, so agreement confirms the arithmetic rather than the model. It is
-    // asserted anyway because a broken `riegel()` would still show up here.
+  it('projects a marathon far faster than the May one, off the new anchor', () => {
+    // He ran 3:52:59 in May. Off the Battersea anchor, even at his OLD and
+    // pessimistic fade exponent of 1.1315, the projection is 3:34:50 -- eighteen
+    // minutes quicker without assuming any improvement in durability at all.
     const { floorSec } = marathonProjection();
-    // He ran 3:52:59 normalised to 42.195 km on 2026-05-10.
-    expect(Math.abs(floorSec - (3 * 3600 + 52 * 60 + 59))).toBeLessThan(60);
+    expect(floorSec).toBeLessThan(3 * 3600 + 40 * 60);
+    expect(floorSec).toBeGreaterThan(3 * 3600 + 25 * 60);
   });
 
   it('shows the block’s claimed benefit as the gap between floor and target', () => {

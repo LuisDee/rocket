@@ -1399,33 +1399,34 @@ export const ATHLETE = {
  */
 export const PACE_ANCHOR = {
   source: 'race',
-  date: '2026-07-19',
-  distanceKm: 21.14,
-  timeSec: 6395,
+  date: '2026-09-12',
+  distanceKm: 21.275,
+  timeSec: 5938,
   /**
    * Riegel exponent used ONLY to normalise the anchor to a standard distance,
-   * never to predict. 1.109, fitted from his 2026-04-11 5.10 km against this
-   * half.
+   * never to predict. 1.109, fitted from his 2026-04-11 5.10 km.
    */
   normalisationExponent: 1.109,
   normalisedDistanceKm: 21.0975,
-  /** 1:46:21 over 21.0975 km. Every multiplier below scales this. */
-  normalisedPaceSecPerKm: 302.4,
-  reanchorOn: '2026-09-12',
   /**
-   * Efforts that must NEVER become the anchor, with the reason each is
-   * disqualified. Both look faster than the anchor and neither is real:
-   * 2026-07-26 carries 17:27 of stopped time across 22 laps, and the 2026-04-25
-   * 5.04 km is a 25 s/km outlier against a 4:19/km race three weeks earlier
-   * while recording LOWER mean and max HR (172/196 against 174/199), which is a
-   * distance or GPS fault rather than a performance.
+   * Battersea Park Half, 2026-09-12: 21.275 km in 1:38:58, five seconds
+   * stopped, normalised to 1:38:03 over the standard distance.
+   *
+   * Replaced the 2026-07-19 anchor of 302.4 s/km. TWENTY-THREE AND A HALF
+   * SECONDS PER KILOMETRE faster, which moves every pace in the block. He ran
+   * the last three kilometres at 4:20, 4:20 and 4:19 with heart rate at 178-182
+   * -- a negative split off a 46:50 first 10 km, and above threshold to the
+   * line. Nothing about it was a fluke or a soft course.
+   */
+  normalisedPaceSecPerKm: 278.9,
+  reanchorOn: '2026-10-24',
+  /**
+   * Efforts that must NEVER become the anchor. 2026-07-26 carries 17:27 of
+   * stopped time across 22 laps; the 2026-04-25 5.04 km is a 25 s/km outlier
+   * recording LOWER mean and max heart rate than a slower race three weeks
+   * earlier, which is a distance fault rather than a performance.
    */
   excludedEfforts: ['2026-07-26', '2026-04-25'],
-  /**
-   * Conditions under which Saturday does NOT re-anchor and this stands: the
-   * race was not run flat out, came in slower than 1:54, or the file shows more
-   * than two minutes stopped.
-   */
   rejectIfSlowerThanSec: 6840,
   rejectIfStoppedOverSec: 120,
 } as const;

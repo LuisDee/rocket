@@ -1783,3 +1783,59 @@ not exist.
 with each other and validated on nobody, so a work-interval mean above 180 bpm is
 read as the PACE being too fast rather than the athlete being unfit, and drops it
 5 s/km. Without that the derived number would never be revisited.
+
+## 2026-09-12 -- the Battersea Half, and four things I had wrong
+
+**1:38:58 for 21.275 km. 4:39/km, avg HR 170, five seconds stopped.** Last three
+kilometres 4:20 / 4:20 / 4:19 at HR 178-182, off a 46:50 first 10 km. A negative
+split finishing above threshold.
+
+The anchor moves from the 2026-07-19 half (302.4 s/km) to this race
+(278.9 s/km normalised) -- **23.5 s/km**, and every zone with it:
+
+    threshold   4:52  ->  4:29
+    marathon    5:28  ->  5:03
+    easy        6:15-6:51  ->  5:46-6:19
+
+### What I got wrong
+
+**The opening pace.** I said 4:50 and to treat 4:45 as something to earn at
+halfway. He opened at 4:36-4:42 and finished faster still. Too conservative by
+about 10 s/km.
+
+**The heart-rate gates, worse.** I set "back off above 174 at 10 km". His 10 km
+heart rate WAS 174. Following my rule he would have eased off and lost the race
+he actually ran. The gate was set from a July effort where 174 was his average
+for a whole half; on a fitter athlete the same number means something different,
+and a fixed bpm threshold cannot know that.
+
+**Garmin's prediction.** It said 1:38:25. He ran 1:38:58 -- **34 seconds, 0.6 %**.
+I had claimed, from n=2, that Garmin over-predicts him by 8.3 %, and used that to
+argue 1:50 was the honest expectation. The calibration factor is now withdrawn:
+two historical points were never enough to fit one, and the one out-of-sample
+test it got, it failed badly.
+
+**The threshold-pace argument, partly.** Garmin's 4:20.9 is 8 s/km from the newly
+derived 4:29, not the 31 I described, and he raced the last 3 km at 4:19-4:20.
+The reasoning was sound on the July data -- it genuinely was slower than his 5 km
+race pace then -- but "the single most likely way to injure him" was an
+overstatement, and the device was tracking something real. Keeping a device pace
+out of the prescription stands; the certainty does not.
+
+### The durability number, with a caveat that matters
+
+Against the July 10 km, the fitted Riegel exponent falls from **1.1315 to 1.001**
+-- better than the population 1.06. That is the block's entire thesis apparently
+already achieved, and it is NOT a clean reading: the two efforts are two months
+apart and he got faster in between, so fitness gain and durability gain are
+inseparable in it. A clean measure needs two distances close in time.
+
+Marathon projection from this anchor: **3:34:50** at his old pessimistic exponent,
+**3:24:27** at population, 3:16 at the fitted one. Against 3:52:59 in May. Even
+the most conservative of those is eighteen minutes quicker.
+
+### What this does NOT change
+
+The 100 km peak is still 1.75x his highest recorded week, and the volume base is
+still thin. A faster half raises the ceiling; it does not raise the floor under
+week 4. The reversal condition stands exactly as ratified.
