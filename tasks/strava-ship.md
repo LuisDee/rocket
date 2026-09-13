@@ -63,7 +63,18 @@ two.
 - [x] Tests against a faked transport, each proven to bite
 - [x] Guard pinned to the sanctioned files
 - [x] Decision entry and gate-ledger row
-- [ ] One live upload — BLOCKED on Luis running `npm run strava:auth` once
+- [x] authorisation done 2026-09-12. The `oauth_tokens` row carries scope
+      `activity:read_all activity:write read`, and the refresh path was exercised
+      against live Strava on 2026-09-13: the grant rotated and persisted, so the
+      credential works rather than merely existing.
+- [ ] One live upload — now blocked on `src/lib/ship.ts` and
+      `src/app/api/ship/route.ts`, which `tasks/preview-and-ship.md` owns and
+      which do not exist. NOT blocked on Luis.
+
+      This line said "BLOCKED on Luis running `npm run strava:auth` once" for a
+      day after it stopped being true, and he went and ran it on my say-so. The
+      lesson is the project's own rule: the database owns truth, the task file
+      owns intent, and a status claim belongs to whichever one can be queried.
 
 ## Notes
 

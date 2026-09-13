@@ -45,7 +45,8 @@ shape; `applyTriggers` signature.
 - [x] rollover regenerates with the standing gate
 - [x] 6 tests, 5 deliberate breakages all caught -- two survived the first pass
       and are why the next-day rollover test and the ordering mutation exist
-- [ ] the app still reads none of this. Its own task.
+- [x] ~~the app still reads none of this~~ -- landed in the same session, see
+      the follow-on section below
 
 ## Commits
 
