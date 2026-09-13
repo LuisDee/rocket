@@ -65,3 +65,4 @@ card), `placement.ts` (probably deleted).
 ## Commits
 
 - `da5c078` feat(planner): compose description over placement, and put it on the screen
+- `ac1a0aa` refactor(plan): one reader for every surface, one soreness rule

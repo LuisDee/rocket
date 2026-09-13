@@ -68,4 +68,4 @@ implementations.
 - [x] cross-surface consistency test over a real MCP client
 - [x] 11 tests, 5 deliberate breakages all caught
 
-- `PENDING2` refactor(plan): one reader for every surface, one soreness rule
+- `ac1a0aa` refactor(plan): one reader for every surface, one soreness rule
