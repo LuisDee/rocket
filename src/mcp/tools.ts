@@ -59,6 +59,7 @@ import {
   parseIsoDate,
   todayInLondon,
 } from '../lib/block';
+import { planForDate } from '../lib/plan';
 import { fail, ok, reason, type ToolResult } from './result';
 import { envelopeOf, keepAsIs, toPlanWindow, windowBounds } from './window';
 
@@ -234,6 +235,11 @@ export function registerRocketTools(
 
         const week = currentWeek(parseIsoDate(today));
         const todaySessions = window.filter((s) => s.date === today);
+        // The SAME composition the app renders. Reported the raw rows before, so
+        // the assistant said "1 session(s) today" with no zone, pace or structure
+        // while the phone showed the whole prescription -- two answers to one
+        // question, from the same data.
+        const prescribed = await planForDate(store, today);
         const readiness =
           checkIn === null
             ? null
@@ -257,9 +263,12 @@ export function registerRocketTools(
           (week === null
             ? 'Outside the block.'
             : `Week ${week.week} (${week.phase}), target ${week.targetKm ?? 'n/a'} km.`) +
-          (todaySessions.length === 0
+          (prescribed.today === null
             ? ' Nothing on the calendar for today.'
-            : ` ${todaySessions.length} session(s) today.`) +
+            : ` Today: ${prescribed.today.zone}, ${String(prescribed.today.km)} km. ${prescribed.today.what}` +
+              (prescribed.today.demoted === null
+                ? ''
+                : ` ${prescribed.today.demoted.reason}`)) +
           (readiness === null
             ? ' No check-in recorded yet.'
             : ` Readiness ${readiness.band}.`) +
@@ -275,6 +284,15 @@ export function registerRocketTools(
           },
           week,
           today_sessions: todaySessions,
+          /**
+           * Today and the week AS PRESCRIBED -- zone, structure, marathon-pace and
+           * threshold content, strides, the gym slot, and what a check-in took
+           * away. `today_sessions` above stays because it carries the row ids
+           * `rocket_adjust_session` needs; this is what to actually tell him.
+           */
+          today_prescribed: prescribed.today,
+          week_prescribed: prescribed.week,
+          plan_source: prescribed.source,
           // Rows, with ids: this is where the model gets the session_id that
           // rocket_adjust_session needs. The planner's own window shape has no
           // key, so a plan can only be pointed at by date without these.

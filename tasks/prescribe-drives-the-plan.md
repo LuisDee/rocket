@@ -50,8 +50,17 @@ card), `placement.ts` (probably deleted).
 - [x] `prescribe` rewritten as a decorator over `planWeek`, placement logic deleted
 - [x] home screen renders zone, pace band, HR band, structure, purpose and gym
 - [x] 13 tests, 6 deliberate breakages all caught
-- [ ] consumed by `daily-pass.ts` (the page is done; the cron is not)
-- [ ] cross-surface consistency test
+- [x] consumed by every surface through one reader, `src/lib/plan.ts`. The cron
+      consumes it as the standing readiness gate (`gateFromCheckIn`) rather than
+      as a renderer -- it writes rows, it does not describe them, and describing
+      is a pure function of the rows it wrote.
+- [x] cross-surface consistency test -- `src/mcp/tools.test.ts` drives
+      `rocket_get_status` over a real MCP client and asserts its payload equals
+      what `planForDate` hands the page, from one store
+- [x] the app now READS the stored plan. It never did: `store.window()` was called
+      nowhere under `src/app`, so every adaptation the planner wrote was invisible
+      on the phone while the watch event generated from the same row said "if this
+      disagrees with the app, the app is right".
 
 ## Commits
 

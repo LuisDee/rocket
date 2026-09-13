@@ -358,23 +358,7 @@ function repair(
       return absorbSpanner(window, trigger.date, trigger.km);
 
     case 'soreness':
-      // The threshold is checked HERE as well as by whoever raised the trigger.
-      // It used to be checked in neither place, so a 1/5 niggle reported on an
-      // amber morning took out the week's only hard session -- a repair firing
-      // below the severity its own config says gates quality
-      // (`READINESS.sorenessBlocksQuality`).
-      if (trigger.severity < READINESS.sorenessBlocksQuality) return window;
-      return sorted(
-        window.map((s) =>
-          s.kind === 'quality' && s.date >= trigger.since
-            ? {
-                ...s,
-                kind: 'easy' as const,
-                note: `Downgraded from quality: soreness ${trigger.severity} reported ${trigger.since}.`,
-              }
-            : s,
-        ),
-      );
+      return demoteQualityFrom(window, trigger.since, trigger.severity);
 
     case 'race-added':
       return addRace(window, trigger.date, trigger.name, trigger.distanceKm);
@@ -393,6 +377,46 @@ function repair(
     case 'trend':
       return window;
   }
+}
+
+/**
+ * THE soreness rule: quality becomes easy from `since` forward, and nothing else
+ * changes.
+ *
+ * One exported function because the rule had two implementations. This one, and a
+ * gate inside `placement.chooseQualityDate` that suppressed the week's quality day
+ * before it was ever placed. They agreed today and were free to drift tomorrow,
+ * and the placement version carried a subtlety the demotion does not need at all
+ * -- excluding the chosen day from the candidate list could PROMOTE some other
+ * day to quality, including one already in the past. Demoting after placement
+ * cannot do that, so the simpler mechanism is also the safer one.
+ *
+ * Below `READINESS.sorenessBlocksQuality` it is a no-op, checked here rather than
+ * trusted to every caller. It used to be checked nowhere, so a 1/5 niggle on an
+ * amber morning took out the week's only hard session.
+ *
+ * The distance is untouched on purpose --
+ * `docs/research/session-prescription-design.json`: "intensity is cut before
+ * volume -- the volume ramp is the ratified experiment; the intensity plan is the
+ * buffer around it, so the buffer is spent first."
+ */
+export function demoteQualityFrom(
+  window: PlanWindow,
+  since: string,
+  severity: number,
+): PlanWindow {
+  if (severity < READINESS.sorenessBlocksQuality) return window;
+  return sorted(
+    window.map((s) =>
+      s.kind === 'quality' && s.date >= since
+        ? {
+            ...s,
+            kind: 'easy' as const,
+            note: `Downgraded from quality: soreness ${String(severity)} reported ${since}.`,
+          }
+        : s,
+    ),
+  );
 }
 
 /**
@@ -539,11 +563,17 @@ function replanWeekWithout(
   const week = BLOCK_WEEKS.find((w) => w.monday === monday);
   if (!week) return window;
 
-  const placement: PlacementOptions = {
-    unavailable: [{ date, slotId }],
-    ...(options.soreness ? { soreness: options.soreness } : {}),
-  };
-  const replanned = planWeek(week, placement).sessions;
+  const placement: PlacementOptions = { unavailable: [{ date, slotId }] };
+  // A standing soreness gate survives a slot loss: replanning the week from the
+  // macro layer would otherwise put back the quality session the gate removed.
+  const replanned =
+    options.soreness === null || options.soreness === undefined
+      ? planWeek(week, placement).sessions
+      : demoteQualityFrom(
+          planWeek(week, placement).sessions,
+          options.soreness.since,
+          options.soreness.severity,
+        );
   const inWindow = new Set(window.map((s) => s.date));
 
   return sorted([

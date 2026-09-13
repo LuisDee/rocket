@@ -34,8 +34,10 @@ import { BLOCK_WEEKS, READINESS } from '../../../config/training';
 import { worstSoreness } from '../readiness';
 import type { CheckIn } from '../types';
 import { daysBetweenIso, mondayOf } from './dates';
+import { demoteQualityFrom } from './negotiate';
 import { planWeek, type BlockWeek } from './placement';
 import { describeWeek, type Described, type Gate } from './prescribe';
+import type { PlannedSession } from './types';
 
 export type PrescribedWeek = {
   readonly monday: string;
@@ -89,24 +91,40 @@ export function gateFromCheckIn(
 export function prescribeWeek(
   week: BlockWeek,
   gate: Gate | null = null,
+  stored: readonly PlannedSession[] | null = null,
 ): PrescribedWeek {
   const open = planWeek(week);
-  const ungated = describeWeek(week, open.sessions);
+  // STORED ROWS WIN. The `sessions` table is what the deterministic planner
+  // actually authored, repairs included; regenerating from `BLOCK_WEEKS` shows the
+  // plan as it would have been if nothing had ever adapted. Config is the
+  // fallback for a week the planner has not reached yet, which is the ordinary
+  // state at the far end of the rolling window.
+  const fromStore = stored !== null && stored.length > 0;
+  const placed = fromStore ? stored : open.sessions;
+  const ungated = describeWeek(week, placed);
 
-  if (gate === null) {
-    return {
-      monday: open.monday,
-      sessions: ungated,
-      targetKm: open.targetKm,
-      placedKm: open.placedKm,
-      shortfallKm: open.shortfallKm,
-      notes: open.notes,
-    };
-  }
+  const pack = (sessions: readonly Described[]): PrescribedWeek => ({
+    monday: open.monday,
+    sessions,
+    targetKm: open.targetKm,
+    placedKm: round1(sessions.reduce((sum, s) => sum + s.km, 0)),
+    // A shortfall is a statement about fitting a TARGET into slots, which only
+    // the config path computed. Reporting the config's figure against stored rows
+    // would attribute a placement compromise to a week that may have been
+    // repaired since.
+    shortfallKm: fromStore ? 0 : open.shortfallKm,
+    notes: open.notes,
+  });
 
-  const closed = planWeek(week, { soreness: gate });
-  const sessions = describeWeek(week, closed.sessions, gate).map(
-    (s): Described => {
+  if (gate === null) return pack(ungated);
+
+  const gated = describeWeek(
+    week,
+    demoteQualityFrom(placed, gate.since, gate.severity),
+    gate,
+  );
+  return pack(
+    gated.map((s): Described => {
       const was = ungated.find(
         (u) => u.date === s.date && u.slot === s.slot && u.km === s.km,
       );
@@ -119,29 +137,26 @@ export function prescribeWeek(
           reason: gateReason(gate),
         },
       };
-    },
+    }),
   );
-
-  return {
-    monday: closed.monday,
-    sessions,
-    targetKm: closed.targetKm,
-    placedKm: closed.placedKm,
-    shortfallKm: closed.shortfallKm,
-    notes: closed.notes,
-  };
 }
 
 /** Today's session, or null when the date falls outside the block. */
 export function prescribeDay(
   date: string,
   gate: Gate | null = null,
+  stored: readonly PlannedSession[] | null = null,
 ): Described | null {
   const week = BLOCK_WEEKS.find((w) => w.monday === mondayOf(date));
   if (week === undefined) return null;
   return (
-    prescribeWeek(week, gate).sessions.find((s) => s.date === date) ?? null
+    prescribeWeek(week, gate, stored).sessions.find((s) => s.date === date) ??
+    null
   );
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
 }
 
 function gateReason(gate: Gate): string {

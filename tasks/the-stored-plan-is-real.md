@@ -50,3 +50,22 @@ shape; `applyTriggers` signature.
 ## Commits
 
 - `59cbe9a` fix(cron): let the planner write a plan, and repair the day it means to
+
+---
+
+## Follow-on, same session
+
+The other half landed too: every surface now reads the stored plan through one
+reader (`src/lib/plan.ts`), and the soreness rule stopped having two
+implementations.
+
+- [x] `prescribeWeek` takes stored rows and prefers them, config as fallback
+- [x] `src/lib/plan.ts` -- one composition, read by `page.tsx` and
+      `rocket_get_status`
+- [x] `rocket_get_status` reports the prescription rather than bare rows
+- [x] `demoteQualityFrom` is the single soreness rule;
+      `PlacementOptions.soreness` deleted
+- [x] cross-surface consistency test over a real MCP client
+- [x] 11 tests, 5 deliberate breakages all caught
+
+- `PENDING2` refactor(plan): one reader for every surface, one soreness rule

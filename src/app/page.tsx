@@ -2,7 +2,6 @@ import Link from 'next/link';
 
 import { BLOCK, RACES } from '../../config/training';
 import { derivePaces } from '../domain/paces';
-import { gateFromCheckIn, prescribeWeek } from '../domain/planner/today';
 import { scoreReadiness } from '../domain/readiness';
 import { postgresStore } from '../domain/store';
 import { blockTotals, weekEnd, weeklyActuals } from '../lib/actuals';
@@ -17,6 +16,7 @@ import {
   todayInLondon,
 } from '../lib/block';
 import { completedRuns, pendingCount, recentRuns } from '../lib/dashboard';
+import { planForDate } from '../lib/plan';
 
 // Days-to-race is wrong the moment it is cached, and every figure here is
 // relative to today.
@@ -48,27 +48,35 @@ export default async function Today() {
   const store = postgresStore();
 
   // Every read is independent; one slow query should not serialise the page.
-  const [checkIn, historyDays, runs, recent, pending] = await Promise.all([
-    store.latestCheckIn().catch(() => null),
-    store.activityHistoryDays(today).catch(() => 0),
-    completedRuns(BLOCK.blockStart, today).catch(
-      (): Awaited<ReturnType<typeof completedRuns>> => [],
-    ),
-    recentRuns(6).catch((): Awaited<ReturnType<typeof recentRuns>> => []),
-    pendingCount().catch(() => 0),
-  ]);
+  const [dayPlan, checkIn, historyDays, runs, recent, pending] =
+    await Promise.all([
+      planForDate(store, today).catch(
+        (): Awaited<ReturnType<typeof planForDate>> => ({
+          date: today,
+          week: [],
+          today: null,
+          gate: null,
+          shortfallKm: 0,
+          notes: [],
+          source: 'config',
+        }),
+      ),
+      store.latestCheckIn().catch(() => null),
+      store.activityHistoryDays(today).catch(() => 0),
+      completedRuns(BLOCK.blockStart, today).catch(
+        (): Awaited<ReturnType<typeof completedRuns>> => [],
+      ),
+      recentRuns(6).catch((): Awaited<ReturnType<typeof recentRuns>> => []),
+      pendingCount().catch(() => 0),
+    ]);
 
-  // Placement decides which day and how far, description decides what the session
-  // IS, and the check-in decides whether he is fit to do it. All three compose in
-  // `prescribeWeek`, which every surface calls -- the screen used to assemble the
-  // first two itself and pass the third no further than a sentence of copy, so it
-  // rendered THRESHOLD and a threshold pace band under "Quality work is gated
-  // today".
-  const gate = gateFromCheckIn(checkIn, today);
-  const plan = week === null ? null : prescribeWeek(week, gate);
-  const described = plan?.sessions ?? [];
+  // One reader for every surface. The screen used to assemble placement and
+  // description itself, never read a session row, and passed the check-in no
+  // further than a sentence of copy -- so it rendered THRESHOLD with a threshold
+  // pace band under "Quality work is gated today", and showed the unadapted plan
+  // while the watch showed the adapted one.
+  const { gate, week: described, today: todaySession } = dayPlan;
   const paces = derivePaces();
-  const todaySession = described.find((s) => s.date === today) ?? null;
   const todayPace =
     todaySession && todaySession.zone !== 'rest' && todaySession.zone !== 'race'
       ? paces[todaySession.zone]
@@ -277,7 +285,7 @@ export default async function Today() {
 
       {/* ------------------------------------------------------- this week --- */}
 
-      {plan === null || week === null ? null : (
+      {week === null ? null : (
         <section className="mt-8">
           <div className="flex items-baseline justify-between">
             <h2 className="text-sm font-medium uppercase tracking-widest text-zinc-500">
@@ -292,7 +300,7 @@ export default async function Today() {
           </div>
 
           <ol className="mt-3 space-y-1.5">
-            {plan.sessions.map((s) => {
+            {described.map((s) => {
               const isToday = s.date === today;
               const actual = runs
                 .filter((r) => r.date === s.date)
@@ -345,12 +353,13 @@ export default async function Today() {
 
           {/* The planner reports what it could not fit rather than quietly
               emitting a smaller week. Showing it is the point. */}
-          {plan.shortfallKm > 0 ? (
+          {dayPlan.shortfallKm > 0 ? (
             <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-300/90 ring-1 ring-amber-500/25">
-              {plan.shortfallKm} km could not be placed in the available slots.
+              {dayPlan.shortfallKm} km could not be placed in the available
+              slots.
             </p>
           ) : null}
-          {plan.notes.map((note) => (
+          {dayPlan.notes.map((note) => (
             <p
               key={note}
               className="mt-2 text-xs leading-relaxed text-zinc-500"

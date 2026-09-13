@@ -20,6 +20,7 @@ import { LOAD, READINESS, SYNC } from '../../config/training';
 import { memoryStore, type MemoryStore } from '../domain/store-memory';
 import type { SessionRow } from '../domain/types';
 import { DAILY_PASS_JOB } from '../jobs/daily-pass';
+import { planForDate } from '../lib/plan';
 import { registerRocketTools } from './tools';
 
 /** A Monday inside the block, so the window covers real weeks. */
@@ -87,6 +88,73 @@ let client: Client;
 beforeEach(async () => {
   store = memoryStore();
   client = await connect(store);
+});
+
+describe('the assistant and the app answer the same question the same way', () => {
+  // The outstanding item on `tasks/prescribe-drives-the-plan.md`: "a test asserts
+  // today's session is identical whether read through the page, the daily pass or
+  // the MCP tool."
+  //
+  // It used to be structurally impossible for them to agree. The app recomputed
+  // the week from BLOCK_WEEKS and never read a session row; this tool read the
+  // rows and reported bare kilometres and a type. Both now go through
+  // `lib/plan.planForDate`, and what this test defends is that the tool did not
+  // quietly keep its own copy.
+  it('reports today’s prescription, and it is the one the app renders', async () => {
+    store.rows.sessions.push(
+      session({ id: 'q', date: TODAY, type: 'quality', plannedKm: 7.6 }),
+    );
+
+    const status = payload(await call(client, 'rocket_get_status'));
+    const app = await planForDate(store, TODAY);
+
+    expect(status.today_prescribed).toEqual(
+      JSON.parse(JSON.stringify(app.today)),
+    );
+    expect(status.plan_source).toBe('stored');
+    // And the human-readable summary carries it too, so a model that reads only
+    // the sentence is not told something different from the payload.
+    expect(text(await call(client, 'rocket_get_status'))).toContain(
+      app.today?.what ?? '@@never@@',
+    );
+  });
+
+  it('stops saying "nothing on the calendar" when a plan exists in config only', async () => {
+    // The bridge outage left `sessions` empty, and the tool answered "Nothing on
+    // the calendar for today" on race morning while the app rendered the race.
+    const status = payload(await call(client, 'rocket_get_status'));
+
+    expect(status.plan_source).toBe('config');
+    expect(status.today_prescribed).not.toBeNull();
+    expect(text(await call(client, 'rocket_get_status'))).not.toContain(
+      'Nothing on the calendar',
+    );
+  });
+
+  it('tells the model a gated session was changed, and why', async () => {
+    store.rows.sessions.push(
+      session({ id: 'q', date: TODAY, type: 'quality', plannedKm: 7.6 }),
+    );
+    await store.insertCheckIn({
+      id: 'ci',
+      localDate: TODAY,
+      rpeYesterday: 5,
+      soreness: [
+        { location: 'achilles', severity: READINESS.sorenessBlocksQuality },
+      ],
+      sleep: 8,
+      motivation: 4,
+      note: null,
+    });
+
+    const body = text(await call(client, 'rocket_get_status'));
+    const status = payload(await call(client, 'rocket_get_status'));
+    const today = status.today_prescribed as { zone: string; demoted: unknown };
+
+    expect(today.zone).toBe('easy');
+    expect(today.demoted).not.toBeNull();
+    expect(body).toContain('gates quality work');
+  });
 });
 
 describe('the surface itself', () => {

@@ -19,7 +19,6 @@ import {
   GUARDRAILS,
   LIVE_RACE_DATES,
   RACES,
-  READINESS,
   REPLAN,
   raceRunInCeilingKm,
 } from '../../../config/training';
@@ -51,20 +50,15 @@ export type PlacementOptions = {
   }[];
   /** The last race or long run BEFORE this week, so Monday can be protected. */
   readonly previousHardDate?: string | null;
-  /**
-   * The morning check-in's soreness, with the day it was reported.
-   *
-   * The date is the load-bearing half, and it used to be missing. A bare
-   * severity gated the WHOLE week, so a Friday check-in retroactively deleted the
-   * threshold session he had already run on the Wednesday -- rewriting history to
-   * match this morning's mood, which is how a plan stops being a record. The gate
-   * applies from `since` forward and no further back.
-   */
-  readonly soreness?: {
-    readonly severity: number;
-    readonly since: string;
-  } | null;
 };
+
+/*
+ * NO SORENESS OPTION HERE, deliberately. Placement used to take one and suppress
+ * the week's quality day before choosing it, which is a second implementation of
+ * a rule `negotiate.demoteQualityFrom` already owned. Demoting after placement is
+ * equivalent, has one home, and cannot accidentally promote a different day to
+ * quality the way removing a candidate could.
+ */
 
 export type WeekPlan = {
   readonly monday: string;
@@ -379,29 +373,13 @@ function chooseQualityDate(
     (date) => gapTo(date) >= GUARDRAILS.minDaysBetweenQualitySessions,
   );
 
-  const chosen =
+  return (
     eligible.reduce<string | null>(
       (best, date) =>
         best === null || gapTo(date) > gapTo(best) ? date : best,
       null,
-    ) ?? null;
-
-  // The soreness gate is applied to the CHOSEN day rather than to the candidate
-  // list, and the difference is not cosmetic. Filtering candidates lets the
-  // winner's exclusion promote some other day to quality -- including a day
-  // already in the past, which a reading taken this morning cannot speak to.
-  // Removing the session is the only honest move; moving it is an invention.
-  const gate = options.soreness;
-  if (
-    gate != null &&
-    gate.severity >= READINESS.sorenessBlocksQuality &&
-    chosen !== null &&
-    chosen >= gate.since
-  ) {
-    return null;
-  }
-
-  return chosen;
+    ) ?? null
+  );
 }
 
 /** The long run or race that closed the week before -- the Monday protector. */

@@ -47,7 +47,11 @@ import {
 } from '../../config/training';
 import { dailyStress, rollingLoad, type LoadState } from '../domain/load';
 import { shiftIso } from '../domain/planner/dates';
-import { replan, type ReplanTrigger } from '../domain/planner/negotiate';
+import {
+  demoteQualityFrom,
+  replan,
+  type ReplanTrigger,
+} from '../domain/planner/negotiate';
 import { planWindow } from '../domain/planner/placement';
 import type { Gate } from '../domain/planner/prescribe';
 import { gateFromCheckIn } from '../domain/planner/today';
@@ -465,13 +469,16 @@ async function applyTriggers(
   if (missing.length > 0) {
     // The standing gate travels INTO the regeneration. Without it the rollover
     // hands back a full-prescription quality session on a day the morning's
-    // check-in gated, days after the downgrade was applied and silently.
+    // check-in gated, days after the downgrade was applied and silently. Applied
+    // by the same `demoteQualityFrom` every other caller uses, so the rollover
+    // and the repair cannot disagree about what soreness does.
+    const fresh = planWindow(from, REPLAN.rollingWindowDays.max);
     await store.replaceWindow(
       from,
       to,
-      planWindow(from, REPLAN.rollingWindowDays.max, {
-        ...(gate === null ? {} : { soreness: gate }),
-      }),
+      gate === null
+        ? fresh
+        : demoteQualityFrom(fresh, gate.since, gate.severity),
     );
     changed = true;
   }
