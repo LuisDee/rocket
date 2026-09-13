@@ -49,6 +49,8 @@ import { dailyStress, rollingLoad, type LoadState } from '../domain/load';
 import { shiftIso } from '../domain/planner/dates';
 import { replan, type ReplanTrigger } from '../domain/planner/negotiate';
 import { planWindow } from '../domain/planner/placement';
+import type { Gate } from '../domain/planner/prescribe';
+import { gateFromCheckIn } from '../domain/planner/today';
 import { scoreReadiness, worstSoreness } from '../domain/readiness';
 import type { Store } from '../domain/store';
 import type { IngestedActivity, SessionRow } from '../domain/types';
@@ -115,26 +117,47 @@ export async function runDailyPass(deps: PassDeps): Promise<PassResult> {
   let pushedToWatch = 0;
   let failure: string | null = null;
 
+  // THE BRIDGE GATES THE BRIDGE, AND NOTHING ELSE. It used to throw here, before
+  // everything -- and `applyTriggers` below is the only code path in the
+  // repository that inserts a session row (`src/db/seed.mts` seeds none on
+  // purpose, and the MCP tools can only repair rows that already exist). So an
+  // unset key left the sessions table permanently empty and the assistant
+  // answering "Nothing on the calendar for today" on race morning, while the app
+  // rendered the race from config. Weekly rollover has no dependency on the
+  // bridge whatsoever; it was ordered behind one.
+  //
+  // It is still a FAILED PASS -- ok:false, no ping, and the dead-man's switch
+  // alarms daily until the key lands. That noise is the point (REDLINES rule 3).
+  // What changes is that the plan exists while the alarm rings.
   try {
     if (deps.bridge === null) {
-      // Not an exception: the key may legitimately not exist yet, and
-      // `00-overview.md` invariant 2 makes every feature work without it. It
-      // IS a failed pass, though -- ok:false, no ping, and the dead-man's
-      // switch alarms daily until the key lands. That noise is the point.
-      throw new Error(
-        'the intervals.icu bridge is not configured (INTERVALS_API_KEY, INTERVALS_ATHLETE_ID)',
-      );
+      failure =
+        'the intervals.icu bridge is not configured (INTERVALS_API_KEY, INTERVALS_ATHLETE_ID)';
+    } else {
+      ingested = await ingest(store, deps.bridge, today);
     }
-
-    ingested = await ingest(store, deps.bridge, today);
-    load = await recompute(store, today);
-    const evaluated = await evaluateTriggers(store, today);
-    const applied = await applyTriggers(store, today, evaluated.fired);
-    triggers = [...evaluated.reports, applied.rollover];
-    replanned = applied.changed;
-    pushedToWatch = await pushPlanToWatch(store, deps.bridge, today);
   } catch (error) {
     failure = reason(error);
+  }
+
+  try {
+    load = await recompute(store, today);
+    const evaluated = await evaluateTriggers(store, today);
+    const applied = await applyTriggers(
+      store,
+      today,
+      evaluated.fired,
+      evaluated.gate,
+    );
+    triggers = [...evaluated.reports, applied.rollover];
+    replanned = applied.changed;
+    if (deps.bridge !== null) {
+      pushedToWatch = await pushPlanToWatch(store, deps.bridge, today);
+    }
+  } catch (error) {
+    // An ingest failure already recorded above is not overwritten: the first
+    // thing that broke is the one worth reading at 07:00.
+    failure = failure ?? reason(error);
   }
 
   const ok = failure === null;
@@ -282,12 +305,27 @@ async function recompute(store: Store, today: string): Promise<LoadState> {
 async function evaluateTriggers(
   store: Store,
   today: string,
-): Promise<{ reports: TriggerReport[]; fired: ReplanTrigger[] }> {
+): Promise<{
+  reports: TriggerReport[];
+  fired: ReplanTrigger[];
+  /**
+   * The STANDING readiness gate, which is not the same as the trigger.
+   *
+   * The trigger fires once and repairs the window it is handed. The gate has to
+   * survive into the weekly rollover, because the rollover regenerates days
+   * wholesale from `BLOCK_WEEKS` and would otherwise re-place a quality session
+   * the gate forbids -- days after the downgrade, with nothing in the note to say
+   * it happened. `gateFromCheckIn` also expires a stale reading, so this cannot
+   * silence the block on the strength of one old check-in.
+   */
+  gate: Gate | null;
+}> {
   const reports: TriggerReport[] = [];
   const fired: ReplanTrigger[] = [];
 
   /* 1 -- daily check-in red/amber readiness. */
   const checkIn = await store.latestCheckIn();
+  const gate = gateFromCheckIn(checkIn, today);
   if (checkIn === null || checkIn.localDate < today) {
     reports.push({
       id: 'readiness',
@@ -352,7 +390,7 @@ async function evaluateTriggers(
     detail: 'not observable by a cron: `rocket_replan` is a conversation',
   });
 
-  return { reports, fired };
+  return { reports, fired, gate };
 }
 
 /**
@@ -403,6 +441,7 @@ async function applyTriggers(
   store: Store,
   today: string,
   fired: readonly ReplanTrigger[],
+  gate: Gate | null = null,
 ): Promise<{ changed: boolean; rollover: TriggerReport }> {
   const from = today;
   const to = shiftIso(today, REPLAN.rollingWindowDays.max - 1);
@@ -424,19 +463,38 @@ async function applyTriggers(
     (day) => !covered.has(day),
   );
   if (missing.length > 0) {
-    await store.replaceWindow(from, to, planWindow(from));
+    // The standing gate travels INTO the regeneration. Without it the rollover
+    // hands back a full-prescription quality session on a day the morning's
+    // check-in gated, days after the downgrade was applied and silently.
+    await store.replaceWindow(
+      from,
+      to,
+      planWindow(from, REPLAN.rollingWindowDays.max, {
+        ...(gate === null ? {} : { soreness: gate }),
+      }),
+    );
     changed = true;
   }
 
   for (const trigger of fired) {
-    const rows = await store.window(from, to);
+    // THE REPAIR SPAN HAS TO CONTAIN THE DAY BEING REPAIRED. `findSpanner` dates
+    // its trigger YESTERDAY and this loop used a window starting TODAY, so
+    // `absorbSpanner` could not see yesterday's plan: `planned` came out 0, the
+    // overshoot became the whole logged run rather than the excess, and the
+    // give-back stripped roughly twice what it should from the remaining easy
+    // days. The out-of-range session then took the INSERT branch in
+    // `replaceWindow` and left a duplicate row, which the next day read as double
+    // the kilometres and reported as a ramp breach that never happened.
+    const anchor = triggerAnchor(trigger);
+    const spanFrom = anchor !== null && anchor < from ? anchor : from;
+    const rows = await store.window(spanFrom, to);
     const result = replan(toPlanWindow(rows), trigger, {
       history: await store.completedRuns(
-        shiftIso(from, -GUARDRAILS.singleSessionSpikeWindowDays),
+        shiftIso(spanFrom, -GUARDRAILS.singleSessionSpikeWindowDays),
         to,
       ),
     });
-    await store.replaceWindow(from, to, result.resulting_window);
+    await store.replaceWindow(spanFrom, to, result.resulting_window);
     changed = true;
   }
 
@@ -451,6 +509,18 @@ async function applyTriggers(
           : `window already covers the ${String(REPLAN.rollingWindowDays.min)}-day horizon`,
     },
   };
+}
+
+/**
+ * The earliest date a trigger is about, so the repair window can reach it.
+ *
+ * `trend` is deliberately absent: it informs and never acts
+ * (`04-mcp-surface.md`), so it has no day to repair.
+ */
+function triggerAnchor(trigger: ReplanTrigger): string | null {
+  if ('date' in trigger) return trigger.date;
+  if ('since' in trigger) return trigger.since;
+  return null;
 }
 
 /* ---------------------------------------------------------- 5. the wrist --- */

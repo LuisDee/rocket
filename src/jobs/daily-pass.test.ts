@@ -239,6 +239,88 @@ describe('the daily pass, when everything works', () => {
   });
 });
 
+describe('the weekly rollover cannot undo a gated session', () => {
+  // REGRESSION. `replaceWindow` writes 10 days and the horizon check needs 7, so
+  // the rollover re-fires a few passes later and regenerates the span wholesale
+  // from BLOCK_WEEKS. It was called with NO placement options, so a quality
+  // session a morning check-in had gated came back at full prescription days
+  // later, with its downgrade note erased and nothing in the coach note to say
+  // so. The repair and the regeneration have to agree, or the regeneration wins
+  // by being last.
+  //
+  // Week 3 rather than week 1, because week 1's phase carries no quality budget
+  // at all and would pass this test vacuously.
+  const week3Clock = {
+    today: () => '2026-09-21',
+    now: () => new Date('2026-09-21T04:30:00Z'),
+  };
+
+  const sore = (severity: number) =>
+    store.insertCheckIn({
+      id: `ci-${String(severity)}`,
+      localDate: '2026-09-21',
+      rpeYesterday: 4,
+      soreness: [{ location: 'achilles', severity }],
+      sleep: 7,
+      motivation: 4,
+      note: null,
+    });
+
+  it('regenerates the window with the standing gate applied', async () => {
+    await sore(4);
+    await run(store, fakeBridge(), { clock: week3Clock });
+
+    expect(
+      store.rows.sessions.filter(
+        (r) => r.type === 'quality' && r.date >= '2026-09-21',
+      ),
+    ).toEqual([]);
+    expect(store.rows.sessions.length).toBeGreaterThan(0);
+  });
+
+  it('keeps the gate on the NEXT day, when no trigger fires to re-apply it', async () => {
+    // The case the in-pass ordering cannot cover, and the one the bug actually
+    // bit on. On the day of the check-in the soreness TRIGGER fires and repairs
+    // the window after the rollover, so the rollover's own gate is redundant.
+    // The day after, the trigger does not fire -- `evaluateTriggers` requires
+    // `checkIn.localDate === today` -- while the reading is still inside
+    // `READINESS.checkInStaleAfterDays`. If the regeneration ignores the standing
+    // gate, that is the pass that hands the threshold session back.
+    await sore(4);
+    const result = await run(store, fakeBridge(), {
+      clock: {
+        today: () => '2026-09-22',
+        now: () => new Date('2026-09-22T04:30:00Z'),
+      },
+    });
+
+    // The premise the test rests on: the trigger really does NOT fire, so the
+    // only thing that can hold the gate is the regeneration itself.
+    const readiness = result.triggers.find((t) => t.id === 'readiness');
+    expect(readiness?.fired).toBe(false);
+    expect(readiness?.detail).toContain('not today');
+    expect(
+      store.rows.sessions.filter(
+        (r) => r.type === 'quality' && r.date >= '2026-09-21',
+      ),
+    ).toEqual([]);
+    expect(store.rows.sessions.length).toBeGreaterThan(0);
+  });
+
+  it('still places the quality session when the reading is below the gate', async () => {
+    // The control. Without it the test above passes just as well on a planner
+    // that never places quality at all.
+    await sore(1);
+    await run(store, fakeBridge(), { clock: week3Clock });
+
+    expect(
+      store.rows.sessions.filter(
+        (r) => r.type === 'quality' && r.date >= '2026-09-21',
+      ).length,
+    ).toBe(1);
+  });
+});
+
 describe('the plan on the wrist', () => {
   it('pushes one event per planned session, keyed on the session id', async () => {
     const bridge = fakeBridge();
@@ -381,6 +463,42 @@ describe('the daily pass fails loudly', () => {
   });
 });
 
+describe('the planner runs whether or not the bridge does', () => {
+  // REGRESSION, and it was today's live state. `applyTriggers` is the ONLY code
+  // path in the repository that inserts a session row (`src/db/seed.mts` seeds
+  // none on purpose, and the MCP tools can only repair rows that exist), and the
+  // bridge guard threw before reaching it. So with INTERVALS_API_KEY unset the
+  // sessions table stayed permanently empty: the assistant answered "Nothing on
+  // the calendar for today" on race morning while the app rendered the race.
+  // Weekly rollover has no dependency on the bridge at all; it was ordered
+  // behind one.
+  it('fills the rolling window even with no bridge configured', async () => {
+    const result = await run(store, null);
+
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain('INTERVALS_API_KEY');
+    expect(store.rows.sessions.length).toBeGreaterThan(0);
+    expect(result.replanned).toBe(true);
+    expect(result.pushedToWatch).toBe(0);
+  });
+
+  it('fills the rolling window even when the bridge is down mid-ingest', async () => {
+    const result = await run(store, fakeBridge({ throwOn: 'activities' }));
+
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain('503');
+    expect(store.rows.sessions.length).toBeGreaterThan(0);
+  });
+
+  it('still withholds the ping and writes the note, so the outage stays loud', async () => {
+    const result = await run(store, null);
+
+    expect(result.deadMansSwitch).toBe('withheld-on-failure');
+    expect(store.rows.notes.length).toBe(1);
+    expect(store.rows.syncRuns[0]?.ok).toBe(false);
+  });
+});
+
 describe('replan triggers the pass can actually see', () => {
   it('absorbs an unplanned run that deviates from the day’s plan', async () => {
     store.rows.sessions.push({
@@ -406,6 +524,66 @@ describe('replan triggers the pass can actually see', () => {
     expect(spanner?.fired).toBe(true);
     expect(spanner?.detail).toContain('20 km');
     expect(result.replanned).toBe(true);
+  });
+
+  it('gives back only the OVERSHOOT, not the whole logged run', async () => {
+    // REGRESSION with a number on it. `findSpanner` dates the trigger YESTERDAY
+    // and `applyTriggers` replanned a window starting TODAY, so `absorbSpanner`
+    // could not see yesterday's plan at all: `planned` came out 0, the overshoot
+    // became the WHOLE logged distance, and the give-back stripped roughly twice
+    // what it should from the remaining easy days. It also inserted a SECOND row
+    // for yesterday, which the next day's window then read as double the
+    // kilometres and reported as a spurious ramp breach.
+    //
+    // 20 km run against 8 km planned is a 12 km overshoot, not a 20 km one.
+    // Monday 8 km planned, then 10 km a day for the whole rolling horizon -- the
+    // horizon matters, because a window short of it makes the rollover fire and
+    // regenerate these rows from config before the spanner ever sees them.
+    // The give-back draws only on the easy days still ahead INSIDE Monday's
+    // calendar week, so givable is the six days 09-08 to 09-13: 60 km.
+    store.rows.sessions.push({
+      id: 'planned-yesterday',
+      date: YESTERDAY,
+      weekNumber: 1,
+      type: 'easy',
+      plannedKm: 8,
+      timeSlot: 'evening',
+      status: 'planned',
+      note: null,
+    });
+    for (let i = 1; i <= REPLAN.rollingWindowDays.max; i += 1) {
+      store.rows.sessions.push({
+        id: `planned-${String(i)}`,
+        date: shiftIso(YESTERDAY, i),
+        weekNumber: 1,
+        type: 'easy',
+        plannedKm: 10,
+        timeSlot: 'evening',
+        status: 'planned',
+        note: null,
+      });
+    }
+
+    await run(
+      store,
+      fakeBridge({ activities: [{ ...RUN_YESTERDAY, distance: 20_000 }] }),
+    );
+
+    // No duplicate: the repaired day now falls inside the span written back.
+    const yesterdayRows = store.rows.sessions.filter(
+      (r) => r.date === YESTERDAY,
+    );
+    expect(yesterdayRows).toHaveLength(1);
+    expect(yesterdayRows[0]?.plannedKm).toBe(20);
+
+    // 12 km of overshoot against 60 km givable is a factor of 0.8, so each 10 km
+    // day becomes 8.0. Under the bug the overshoot read as the whole 20 km, the
+    // factor was 0.667, and every day was cut to 6.7 -- roughly 8 km out of a
+    // ratified week for no reason.
+    const todayKm = store.rows.sessions
+      .filter((r) => r.date === TODAY)
+      .reduce((sum, r) => sum + (r.plannedKm ?? 0), 0);
+    expect(todayKm).toBe(8);
   });
 
   it('leaves the plan alone when yesterday matched it', async () => {
