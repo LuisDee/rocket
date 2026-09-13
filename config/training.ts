@@ -1000,8 +1000,33 @@ export const STRENGTH = {
   legsOnHardestRunDay: true,
   legsMinHoursAfterRun: 6,
 
-  /** Push and pull carry no placement constraint. See the note above. */
-  upperBodyUnconstrained: true,
+  /**
+   * The day must already be carrying real running load for legs to sit on it.
+   *
+   * The rule above says "consolidating it onto an already-hard day keeps the easy
+   * days easy", and without a floor that sentence has no teeth: week 1's longest
+   * non-race session is a 2.3 km taper shakeout, and putting heavy squats beside
+   * it turns the easiest day of the block into the hardest -- the exact collapse
+   * the prose warns about. A week with no day above this floor simply gets no
+   * leg session.
+   *
+   * PROVISIONAL, and a judgement rather than a measurement: 8 km is roughly
+   * three quarters of an hour at his easy pace, which is a day that is already a
+   * session. Nothing in the strength literature speaks to the question.
+   */
+  legsMinRunKmOnTheDay: 8,
+
+  /**
+   * No gym session on a race day, or this many days before one -- upper body
+   * included.
+   *
+   * Replaces an `upperBodyUnconstrained: true` that nothing read and that had
+   * become false. Upper body is unconstrained against RUNNING, which is what the
+   * prose above argues and it is right; it is not unconstrained against racing.
+   * The planner was putting push on 2026-09-10 and pull on 2026-09-11, the two
+   * days before the half whose result re-anchors every pace in the block.
+   */
+  gymFreeDaysBeforeRace: 1,
 
   /**
    * Heavy and low-rep, NOT hypertrophy. The economy and injury evidence is for
@@ -1023,7 +1048,38 @@ export const STRENGTH = {
    */
   dropLegsFromWeek: 6,
   /** Race week: upper body only, early, or nothing at all. */
-  raceWeekPolicy: 'one light push session Monday, or nothing. Never legs.',
+  raceWeek: {
+    /**
+     * Lifts in the week of the goal race, from the upper-body rotation only, on
+     * the earliest days the week offers.
+     *
+     * Was a prose `raceWeekPolicy` string that nothing could read, so the
+     * planner put pull on 2026-10-22 -- two days before the marathon. The number
+     * is what the code enforces; the note is the record of the decision.
+     */
+    lifts: 1,
+    note: 'One light push session Monday, or nothing. Never legs.',
+  },
+
+  /**
+   * Push and pull. Heavy and low-rep for the same reason legs is.
+   *
+   * Recorded so the athlete is told what to do rather than the word "push". The
+   * honest caveat: Lauersen 2018's risk ratio of 0.338 is pooled over programmes
+   * dominated by lower-body and trunk work, so the injury case for THIS half of
+   * the split is weak. It is here because Luis asked for a push/pull/legs split,
+   * and if it is going to happen it should at least not compete with the running.
+   */
+  upperBody: {
+    scheme: '3-4 sets x 5-8 reps, heavy, long rests',
+    push: [
+      'overhead press',
+      'incline or flat press',
+      'dips or close-grip press',
+    ],
+    pull: ['weighted pull-up or row', 'single-arm row', 'face pull'],
+    note: "Nothing to failure. It should not be felt on tomorrow's run.",
+  },
 
   /**
    * PROVISIONAL. Three sessions a week is Luis's instruction rather than a

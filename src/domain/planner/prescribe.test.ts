@@ -15,8 +15,14 @@ import {
   PRESCRIPTION,
   RACES,
 } from '../../../config/training';
+import { shiftIso } from './dates';
 import { planWeek } from './placement';
-import { describeWeek, longRunMpKm, thresholdKmFor } from './prescribe';
+import {
+  describeWeek,
+  longRunMpKm,
+  placeStrength,
+  thresholdKmFor,
+} from './prescribe';
 
 const blockWeek = (n: number) => {
   const w = BLOCK_WEEKS.find((x) => x.week === n);
@@ -145,29 +151,153 @@ describe('races', () => {
 });
 
 describe('strength placement', () => {
-  it('puts legs on the longest session of the week, never an easy day', () => {
+  it('never puts a barbell on a race day', () => {
+    // THE REGRESSION. `placeStrength` picked the longest session by kilometres
+    // with no notion of a race, so heavy squats landed on the maximal Battersea
+    // Half (2026-09-12, the effort every pace in the block is anchored on), on
+    // Lincoln day (2026-10-04, 33 km with 21.1 at marathon pace) and on the
+    // raced 10K (2026-10-11). A competent coach refuses all three.
+    for (const w of BLOCK_WEEKS) {
+      for (const s of describeWeek(w, planWeek(w).sessions)) {
+        if (s.race === null) continue;
+        expect(s.strength).toBeNull();
+      }
+    }
+  });
+
+  it('leaves the day before a race clear of the gym too', () => {
+    // Push was on 2026-09-10 and pull on 2026-09-11 -- the two days before the
+    // half. Upper body is unconstrained against RUNNING, which is the argument
+    // the config makes and it is right; it is not unconstrained against racing.
+    const eves = new Set(
+      RACES.filter((r) => r.role !== 'dropped').map((r) =>
+        shiftIso(r.date, -1),
+      ),
+    );
+    for (const w of BLOCK_WEEKS) {
+      for (const s of describeWeek(w, planWeek(w).sessions)) {
+        if (!eves.has(s.date)) continue;
+        expect(s.strength).toBeNull();
+      }
+    }
+  });
+
+  it('puts legs on the hardest NON-race day, and only one that is already hard', () => {
     for (const w of BLOCK_WEEKS) {
       const out = describeWeek(w, planWeek(w).sessions);
       const legs = out.find((s) => s.strength === 'legs');
       if (!legs) continue;
-      const longest = out.reduce((a, b) => (b.km > a.km ? b : a));
-      expect(legs.date).toBe(longest.date);
+      const hardest = out
+        .filter((s) => s.race === null)
+        .reduce((a, b) => (b.km > a.km ? b : a));
+      expect(legs.date).toBe(hardest.date);
+      expect(legs.km).toBeGreaterThanOrEqual(8);
     }
   });
 
-  it('lifts three times a week through week 5, then twice', () => {
-    for (const n of [1, 2, 3, 4, 5]) {
-      const lifts = new Set(
-        described(n).flatMap((s) => (s.strength ? [s.strength] : [])),
+  it('gives week 1 no leg session at all, because no day in it is hard', () => {
+    // Its longest non-race session is a 2.3 km taper shakeout. Loading a barbell
+    // beside that turns the easiest day of the block into the hardest, which is
+    // the collapse STRENGTH's own prose warns about.
+    expect(described(1).some((s) => s.strength === 'legs')).toBe(false);
+    expect(
+      Math.max(
+        ...described(1)
+          .filter((s) => s.race === null)
+          .map((s) => s.km),
+      ),
+    ).toBeLessThan(8);
+  });
+
+  it('keeps legs in peak week even though the race carries the long session', () => {
+    // The opposite failure to week 1: skipping legs in the 100 km week would drop
+    // the injury protection exactly where the volume is highest.
+    const legs = described(4).find((s) => s.strength === 'legs');
+    expect(legs?.date).toBe('2026-09-29');
+  });
+
+  it('lifts three times a week in the build weeks and twice once legs is dropped', () => {
+    for (const n of [2, 3, 4, 5]) {
+      const lifts = described(n).flatMap((s) =>
+        s.strength ? [s.strength] : [],
       );
-      expect(lifts.size).toBe(3);
+      expect(lifts.length).toBe(3);
+      expect(new Set(lifts).size).toBe(3);
     }
-    for (const n of [6, 7]) {
-      const lifts = new Set(
-        described(n).flatMap((s) => (s.strength ? [s.strength] : [])),
+    for (const n of [1, 6]) {
+      const lifts = described(n).flatMap((s) =>
+        s.strength ? [s.strength] : [],
       );
-      expect(lifts.size).toBe(2);
-      expect(lifts.has('legs')).toBe(false);
+      expect(lifts.length).toBe(2);
+      expect(lifts).not.toContain('legs');
+    }
+  });
+
+  it('gives race week one upper-body session on the Monday and nothing else', () => {
+    // `raceWeekPolicy` was a prose string nothing could read, so the planner put
+    // pull on 2026-10-22 -- two days before the marathon -- and another the day
+    // AFTER it.
+    const lifts = described(7).filter((s) => s.strength !== null);
+
+    expect(lifts.map((s) => [s.date, s.strength])).toEqual([
+      ['2026-10-19', 'push'],
+    ]);
+  });
+
+  it('puts legs AFTER a mid-week race rather than two days before it', () => {
+    // Every race in this block is on a weekend, where taking the earliest of the
+    // equal-effort days happens to give the right answer. Move a race to a
+    // Wednesday and it does not: Monday is two days out, and the honest choice is
+    // the Thursday after. The rule exists for the calendar rather than for this
+    // fixture list, so the race dates are injected.
+    const week = blockWeek(3);
+    const days = [
+      '2026-09-21',
+      '2026-09-22',
+      '2026-09-23',
+      '2026-09-24',
+      '2026-09-25',
+    ];
+    const sessions = days.map((date) => ({
+      date,
+      km: 12,
+      kind: 'easy' as const,
+      slot: 'evening',
+    }));
+
+    // Wednesday race: Wednesday is blocked as the race and Tuesday as its eve,
+    // leaving Monday, Thursday and Friday all at 12 km. Monday is two days out
+    // and loses; Thursday and Friday are both past the race and tie, so date
+    // order takes the earlier. Thursday is the answer, and Monday is the answer
+    // the tie-break exists to refuse.
+    const placed = placeStrength(week, sessions, ['2026-09-23']);
+
+    expect([...placed.entries()].find(([, k]) => k === 'legs')?.[0]).toBe(
+      '2026-09-24',
+    );
+    // And the race and its eve stay clear, while Monday -- two days out, which
+    // `gymFreeDaysBeforeRace: 1` does not reach -- may still take upper body.
+    expect(placed.get('2026-09-23')).toBeUndefined();
+    expect(placed.get('2026-09-22')).toBeUndefined();
+    expect(placed.get('2026-09-21')).toBe('push');
+  });
+
+  it('tells him what the lift actually is, not just its name', () => {
+    // "Gym: legs" was the whole prescription. The heavy, low-rep instruction that
+    // makes this match the evidence it cites never reached him, so the default is
+    // the three-sets-of-twelve the config explicitly warns against.
+    const legs = described(3).find((s) => s.strength === 'legs');
+    expect(legs?.gym).toContain('3-5 sets x 3-6 reps');
+    expect(legs?.gym).toContain('trap-bar deadlift');
+    expect(legs?.gym).toContain('6 h after');
+
+    const push = described(3).find((s) => s.strength === 'push');
+    expect(push?.gym).toContain('overhead press');
+    expect(push?.gym).toContain('5-8 reps');
+
+    for (const s of described(3)) {
+      if (s.strength === null) expect(s.gym).toBeNull();
+      else expect((s.gym ?? '').length).toBeGreaterThan(20);
     }
   });
 });

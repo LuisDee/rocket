@@ -178,12 +178,9 @@ export default async function Today() {
                 {todaySession.why}
               </p>
             ) : null}
-            {todaySession.strength ? (
-              <p className="mt-2.5 border-t border-zinc-800 pt-2.5 text-sm text-amber-300">
-                Gym: {todaySession.strength}
-                {todaySession.strength === 'legs'
-                  ? ' \u2014 at least 6 h after the run'
-                  : ''}
+            {todaySession.gym ? (
+              <p className="mt-2.5 border-t border-zinc-800 pt-2.5 text-sm leading-relaxed text-amber-300">
+                Gym: {todaySession.gym}
               </p>
             ) : null}
             {todaySession.note ? (

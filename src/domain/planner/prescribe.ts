@@ -31,7 +31,8 @@
  * 23.5 s/km without one of them being edited.
  */
 
-import { PRESCRIPTION, RACES, STRENGTH } from '../../../config/training';
+import { BLOCK, PRESCRIPTION, RACES, STRENGTH } from '../../../config/training';
+import { shiftIso } from './dates';
 import type { PlannedSession } from './types';
 
 export type StrengthKind = (typeof STRENGTH.split)[number];
@@ -47,6 +48,8 @@ export type Described = PlannedSession & {
   readonly thresholdKm: number;
   readonly strides: number;
   readonly strength: StrengthKind | null;
+  /** The lift in full -- scheme, movements and the separation. Null on a day with no lift. */
+  readonly gym: string | null;
   readonly race: string | null;
   readonly what: string;
   readonly why: string | null;
@@ -118,17 +121,15 @@ export function describeWeek(
   const tKm = thresholdKmFor(week, hasRace);
   const mpKm = longRunMpKm(week);
 
-  const longest = sessions.reduce<PlannedSession | null>(
-    (a, b) => (a === null || b.km > a.km ? b : a),
-    null,
-  );
-  const strength = placeStrength(sessions, longest?.date ?? null, week.week);
+  const strength = placeStrength(week, sessions);
 
   return sessions.map((s): Described => {
     const race = raceOn(s.date);
+    const lift = strength.get(s.date) ?? null;
     const base = {
       ...s,
-      strength: strength.get(s.date) ?? null,
+      strength: lift,
+      gym: lift === null ? null : gymText(lift),
       race,
       mpKm: 0,
       thresholdKm: 0,
@@ -197,32 +198,151 @@ export function describeWeek(
   });
 }
 
+/** The upper-body half of the split, in rotation order. `legs` is the constrained one. */
+const UPPER: readonly StrengthKind[] = STRENGTH.split.filter(
+  (kind): kind is StrengthKind => kind !== 'legs',
+);
+
+/** Every race still standing, in date order. The default for `placeStrength`. */
+export function liveRaceDates(): readonly string[] {
+  return RACES.filter((r) => r.role !== 'dropped')
+    .map((r) => r.date)
+    .sort();
+}
+
 /**
- * Where the three lifts go.
+ * Days no barbell may touch: every live race, and the days before it.
  *
- * Legs on the longest run, several hours after it. Push and pull carry no
- * constraint and take the two lightest days. Legs disappears from
- * `STRENGTH.dropLegsFromWeek`: heavy lower body inside the final fortnight adds
- * fatigue the taper exists to shed, and the injury protection is banked by then.
+ * Race day itself was the worse of the two faults -- `placeStrength` picked the
+ * longest session by KILOMETRES with no notion of a race, so heavy squats landed
+ * on the maximal Battersea Half, on Lincoln day and on the raced 10K. The eve is
+ * the subtler one: sorting by kilometres makes 0 km rest days the first picks for
+ * upper body, and the rest days a taper puts immediately before a race are
+ * exactly those.
+ */
+function gymFreeDates(races: readonly string[]): Set<string> {
+  const out = new Set<string>();
+  for (const date of races) {
+    out.add(date);
+    for (let d = 1; d <= STRENGTH.gymFreeDaysBeforeRace; d += 1) {
+      out.add(shiftIso(date, -d));
+    }
+  }
+  return out;
+}
+
+/** Days from `date` to the next race at or after it, or a large number if none. */
+function daysToNextRace(date: string, races: readonly string[]): number {
+  const next = races.filter((d) => d >= date)[0];
+  if (next === undefined) return Number.MAX_SAFE_INTEGER;
+  return Math.round(
+    (Date.parse(`${next}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) /
+      86_400_000,
+  );
+}
+
+/**
+ * Where the week's lifts go.
+ *
+ * Legs on the hardest NON-RACE day that is already carrying real running load,
+ * several hours after the run. Push and pull take the lightest remaining days,
+ * because upper body does not compete with running recovery and putting it on a
+ * rest or easy day therefore costs nothing.
+ *
+ * Three things stop it: `dropLegsFromWeek`, because heavy lower body inside the
+ * final fortnight adds fatigue the taper exists to shed and the injury
+ * protection is banked by then; `legsMinRunKmOnTheDay`, because a week whose
+ * hardest day is a 2.3 km shakeout has nowhere to put legs that would not turn
+ * its easiest day into its hardest; and the week of the goal race, which gets
+ * `STRENGTH.raceWeek.lifts` upper-body sessions on its earliest days and nothing
+ * else.
  */
 export function placeStrength(
+  week: WeekFacts,
   sessions: readonly PlannedSession[],
-  longestDate: string | null,
-  weekNumber: number,
+  races: readonly string[] = liveRaceDates(),
 ): Map<string, StrengthKind> {
   const out = new Map<string, StrengthKind>();
-  if (longestDate !== null && weekNumber < STRENGTH.dropLegsFromWeek) {
-    out.set(longestDate, 'legs');
+  const dates = [...new Set(sessions.map((s) => s.date))].sort();
+  const kmOn = (date: string) =>
+    sessions
+      .filter((s) => s.date === date)
+      .reduce((total, s) => total + s.km, 0);
+
+  // Race week is not a training week. Earliest days first, so the lift sits as
+  // far from race day as the week allows.
+  if (dates.includes(BLOCK.goalRaceDate)) {
+    for (const date of dates.slice(0, STRENGTH.raceWeek.lifts)) {
+      const lift = UPPER[0];
+      if (lift !== undefined) out.set(date, lift);
+    }
+    return out;
   }
 
-  const byEase = [...sessions]
-    .filter((s) => s.date !== longestDate)
-    .sort((a, b) => a.km - b.km);
-  const first = byEase.at(0);
-  const second = byEase.find((s) => s.date !== first?.date);
-  if (first) out.set(first.date, 'push');
-  if (second) out.set(second.date, 'pull');
+  const blocked = gymFreeDates(races);
+  const open = dates.filter((d) => !blocked.has(d));
+
+  const legsDate =
+    week.week < STRENGTH.dropLegsFromWeek
+      ? (open
+          .filter((d) => kmOn(d) >= STRENGTH.legsMinRunKmOnTheDay)
+          // Hardest day first. Ties -- peak week's five identical 13.4 km
+          // evenings -- break to the day furthest from the next race, which for
+          // a race mid-week means AFTER it rather than two days before. Every
+          // race in this block falls on a weekend, where earliest-first would
+          // give the same answer; the rule is here for the calendar rather than
+          // for the fixture list, and its own test injects a Wednesday race.
+          .sort(
+            (a, b) =>
+              kmOn(b) - kmOn(a) ||
+              daysToNextRace(b, races) - daysToNextRace(a, races),
+          )
+          .at(0) ?? null)
+      : null;
+  if (legsDate !== null) out.set(legsDate, 'legs');
+
+  const slots = Math.min(
+    STRENGTH.sessionsPerWeek - (legsDate === null ? 0 : 1),
+    UPPER.length,
+  );
+  const lightestFirst = open
+    .filter((d) => d !== legsDate)
+    .sort((a, b) => kmOn(a) - kmOn(b));
+
+  for (let i = 0; i < slots; i += 1) {
+    const date = lightestFirst[i];
+    const lift = UPPER[i];
+    if (date !== undefined && lift !== undefined) out.set(date, lift);
+  }
+
   return out;
+}
+
+/**
+ * The lift, written out.
+ *
+ * `STRENGTH.legs.scheme`, `.lifts`, `.plyometrics` and `.note` were read by
+ * nothing: the athlete saw the word "legs" and a hardcoded "at least 6 h after
+ * the run". The one instruction that makes this block's strength work match the
+ * evidence it cites -- heavy and low-rep rather than hypertrophy -- never
+ * reached him, so the default behaviour was the three-sets-of-twelve the config
+ * explicitly warns against, and Lauersen 2018's risk ratio of 0.338 rests on
+ * doing the prescribed dose.
+ */
+function gymText(lift: StrengthKind): string {
+  if (lift === 'legs') {
+    return [
+      `Legs, ${STRENGTH.legs.scheme}: ${STRENGTH.legs.lifts.join(', ')}.`,
+      `${STRENGTH.legs.plyometrics}.`,
+      STRENGTH.legs.note,
+      `At least ${String(STRENGTH.legsMinHoursAfterRun)} h after the run.`,
+    ].join(' ');
+  }
+
+  const movements =
+    lift === 'push' ? STRENGTH.upperBody.push : STRENGTH.upperBody.pull;
+  const name = lift.charAt(0).toUpperCase() + lift.slice(1);
+  return `${name}, ${STRENGTH.upperBody.scheme}: ${movements.join(', ')}. ${STRENGTH.upperBody.note}`;
 }
 
 function round1(n: number): number {
