@@ -57,4 +57,4 @@ not.
 
 ## Commits
 
-- `PENDING` fix(planner): give the run-in to the marathon a shape
+- `297c641` fix(planner): give the run-in to the marathon a shape
