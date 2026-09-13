@@ -54,4 +54,4 @@ reason the strength work exists.
 
 ## Commits
 
-- `PENDING` fix(planner): keep the barbell off race days and tell him the lift
+- `c10c2a8` fix(planner): keep the barbell off race days and tell him the lift
