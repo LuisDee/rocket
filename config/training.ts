@@ -244,7 +244,72 @@ export const GUARDRAILS = {
 
   /** The final N weeks are protected: nothing may be added above target. */
   protectedTaperWeeks: 2,
+
+  /**
+   * The run-in to the goal race: how long a single run may be, by how close to
+   * race day it sits.
+   *
+   * This existed as prose in the research and nowhere in code, and the gap was
+   * not cosmetic. `distribute()` spreads a week's kilometres evenly across
+   * whatever days are left, so race week put 16 km on the Tuesday and 16 km on
+   * the Wednesday before the marathon -- three and four days out -- and then
+   * rested Thursday and Friday. Legal under every rule then written, and a week
+   * no coach would hand anyone.
+   *
+   * Two numbers, from two different claims in
+   * `docs/research/training-evidence-quantified.json` rank 4 (evidence grade
+   * A-, Bosquet 2007's 27 controlled studies converging with Smyth & Lawlor
+   * 2021's 158,117 recreational marathoners):
+   *
+   *   - `fortnightCeilingKm` is "nothing longer than ~13 km inside the last 14
+   *     days", verbatim from that intervention.
+   *   - `finalDaysCeilingKm` is the step-down inside the final five days, where
+   *     the same source asks for FREQUENCY and INTENSITY held while volume
+   *     falls. A flat 13 km ceiling would satisfy the fortnight rule and still
+   *     allow 13 km the day before the race.
+   *
+   * Index is days until the goal race, so index 0 is race day -- there is no
+   * separate easy run on it. Index 1, the day before, is a 5 km shakeout.
+   *
+   * WHAT THIS DOES NOT TOUCH: a long run or a race whose distance the macro
+   * layer chose. Week 6's 18 km on 2026-10-18 is six days out and over the
+   * fortnight ceiling; it is a ratified `BLOCK_WEEKS` decision, and the
+   * guardrail reports it as an ADVISORY breach rather than refusing it. Only
+   * the easy volume the planner itself distributes is capped. See
+   * `raceRunInBreaches()`.
+   */
+  raceRunIn: {
+    fortnightDays: 14,
+    fortnightCeilingKm: 13,
+    finalDaysCeilingKm: [0, 5, 7, 9, 11] as readonly number[],
+  },
 } as const;
+
+/**
+ * The longest run the run-in allows on a date, or `null` where it does not bind.
+ *
+ * Lives beside the numbers rather than in the planner because two callers need
+ * the same answer and must not each derive it: `placement.distribute()` shapes
+ * the week so the ceiling is never breached, and `guardrails.raceRunInBreaches()`
+ * catches a week that breaches it anyway -- an athlete's own edit through the
+ * MCP surface, or a ratified long run. Two derivations would eventually
+ * disagree, and the athlete would be told a session was fine by one surface and
+ * refused by the other.
+ */
+export function raceRunInCeilingKm(date: string): number | null {
+  const daysOut = Math.round(
+    (Date.parse(`${BLOCK.goalRaceDate}T00:00:00Z`) -
+      Date.parse(`${date}T00:00:00Z`)) /
+      86_400_000,
+  );
+  if (daysOut < 0) return null;
+
+  const step = GUARDRAILS.raceRunIn.finalDaysCeilingKm[daysOut];
+  if (step !== undefined) return step;
+  return daysOut <= GUARDRAILS.raceRunIn.fortnightDays
+    ? GUARDRAILS.raceRunIn.fortnightCeilingKm
+    : null;
+}
 
 /**
  * Stable rule ids, so a planner decision can name the rules it applied and the
@@ -272,6 +337,15 @@ export const GUARDRAIL_RULE_IDS = {
     'racesCountAsQualitySessions',
   ],
   'protected-taper': ['protectedTaperWeeks'],
+
+  /**
+   * The run-in to the goal race. Its own id rather than folded into
+   * `protected-taper`: that rule is about a week's TOTAL against its target,
+   * this one is about a SINGLE session against its distance from race day, and
+   * a week can satisfy either while breaking the other. Race week's 32 km was
+   * exactly on target and held 16 km three days out.
+   */
+  'race-run-in': ['raceRunIn'],
 
   /**
    * The injury gate. docs/specs/03-planner.md:24 makes "no quality session

@@ -257,33 +257,51 @@ describe('scenario: a race cancelled mid-block', () => {
   });
 });
 
-describe('scenario: a missed weekday morning', () => {
-  // A first-class replan trigger, not an exception: the volume arithmetic has
-  // no slack in the weekday mornings.
+describe('scenario: a lost run slot', () => {
+  // A first-class replan trigger, not an exception.
+  //
+  // This scenario used to lose the weekday MORNING of 2026-10-20 and assert the
+  // day got shorter, and it passed because race week put 16 km on that Tuesday:
+  // 14 in the evening plus a 2 km morning top-up, three days before the
+  // marathon. The run-in ceiling removed that session, so the fixture now
+  // exercises the trigger the other way round -- lose the evening, and the day's
+  // volume has to find the morning. Same mechanism, on a day that exists.
   const window = planWindow('2026-10-19', 7);
   const result = replan(window, {
     kind: 'availability-lost',
     date: '2026-10-20',
-    slotId: 'weekday-morning',
+    slotId: 'evening',
   });
 
   it('empties the lost slot and re-places what it held', () => {
     expect(
       result.resulting_window.filter(
-        (s) => s.date === '2026-10-20' && s.slot === 'weekday-morning',
+        (s) => s.date === '2026-10-20' && s.slot === 'evening',
       ),
     ).toEqual([]);
-    expect(kmOn(result.resulting_window, '2026-10-20')).toBeLessThan(
+    // The kilometres do not vanish: they move to the only other slot the day
+    // offers. Losing a slot is a constraint on WHERE, not on how much.
+    expect(kmOn(result.resulting_window, '2026-10-20')).toBe(
       kmOn(window, '2026-10-20'),
     );
-    expect(kmOn(result.resulting_window, '2026-10-21')).toBeGreaterThan(
-      kmOn(window, '2026-10-21'),
-    );
+    expect(
+      result.resulting_window.find((s) => s.date === '2026-10-20')?.slot,
+    ).toBe('weekday-morning');
   });
 
   it('names the slot it lost and what moved', () => {
-    expect(result.diff.rationale).toContain('weekday-morning');
+    expect(result.diff.rationale).toContain('evening');
     expect(result.diff.changes.length).toBeGreaterThan(0);
+  });
+
+  it('has no weekday morning left in the generated block to lose', () => {
+    // Worth locking down rather than leaving as a surprise. Every planned day in
+    // the block now fits inside one evening, so Luis's own "I missed the morning
+    // run" trigger has nothing to remove. It becomes live again the moment
+    // AVAILABILITY.runSlots.evening.maxKm comes down from its PROVISIONAL 14 --
+    // and this assertion is what will say so.
+    const block = planWindow('2026-09-14', 49);
+    expect(block.filter((s) => s.slot === 'weekday-morning')).toEqual([]);
   });
 });
 

@@ -9,7 +9,12 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { BLOCK_WEEKS, PRESCRIPTION, RACES } from '../../../config/training';
+import {
+  AVAILABILITY,
+  BLOCK_WEEKS,
+  PRESCRIPTION,
+  RACES,
+} from '../../../config/training';
 import { planWeek } from './placement';
 import { describeWeek, longRunMpKm, thresholdKmFor } from './prescribe';
 
@@ -38,15 +43,34 @@ describe('describing does not re-place', () => {
   });
 
   it('keeps the doubles planWeek produced', () => {
-    // Race week splits Tuesday and Wednesday across two slots because the
-    // evening caps at 14 km. Doubles were never missing from the system -- an
-    // earlier generator of mine simply did not use them.
-    const out = described(7);
+    // Doubles were never missing from the system -- an earlier generator of mine
+    // simply did not use them. This used to read them off race week, which split
+    // its Tuesday and Wednesday into 14 + 2 km; the run-in ceiling removed those
+    // sessions, and rightly, so the condition is now created rather than found.
+    //
+    // Peak week minus one Tuesday: 67 km of easy volume over four days is
+    // 16.75 a day, and the evening slot caps at 14. The day has to open a second
+    // slot or the week cannot be run at all.
+    const w = blockWeek(4);
+    const unavailable = AVAILABILITY.runSlots.map((slot) => ({
+      date: '2026-09-29',
+      slotId: slot.id,
+    }));
+    const out = describeWeek(w, planWeek(w, { unavailable }).sessions);
+
     const perDate = new Map<string, number>();
     for (const s of out) perDate.set(s.date, (perDate.get(s.date) ?? 0) + 1);
-    expect([...perDate.values()].filter((n) => n > 1).length).toBeGreaterThan(
-      0,
-    );
+    const doubled = [...perDate.entries()].filter(([, n]) => n > 1);
+
+    expect(doubled.length).toBeGreaterThan(0);
+    for (const [date] of doubled) {
+      const sessions = out.filter((s) => s.date === date);
+      expect(new Set(sessions.map((s) => s.slot)).size).toBe(sessions.length);
+      for (const s of sessions) {
+        const slot = AVAILABILITY.runSlots.find((x) => x.id === s.slot);
+        expect(s.km).toBeLessThanOrEqual(slot?.maxKm ?? 0);
+      }
+    }
   });
 
   it('gives every running session something to actually do', () => {

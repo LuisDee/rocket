@@ -248,6 +248,72 @@ describe('guardrail evaluation', () => {
     expect(spike?.blocking).toBe(false);
   });
 
+  it('catches a long easy run stacked into the days before the marathon', () => {
+    // The shape race week actually generated before the run-in ceilings: 16 km
+    // on the Wednesday, three days out. Literal 9 rather than a figure read back
+    // out of GUARDRAILS.raceRunIn, so raising the ceiling cannot make the test
+    // agree with it.
+    const results = evaluateGuardrails({
+      window: [easy('2026-10-21', 16)],
+    });
+    const runIn = find(results, 'race-run-in')[0];
+
+    expect(runIn?.breached).toBe(true);
+    expect(runIn?.observed).toBe(1);
+    expect(runIn?.detail).toContain('16 km on 2026-10-21');
+    expect(runIn?.detail).toContain('9 km ceiling');
+    expect(runIn?.detail).toContain('3 days out');
+  });
+
+  it('reports a ratified long run inside the final fortnight as advisory, never a blocker', () => {
+    // Week 6's 18 km on 2026-10-18 is six days out and over the 13 km the
+    // research asks for. It is a BLOCK_WEEKS decision, so the rule names it and
+    // costs it rather than refusing the taper the config authored -- the same
+    // structural reason the single-session spike is advisory.
+    const results = evaluateGuardrails({
+      window: [
+        { date: '2026-10-18', km: 18, kind: 'long', slot: 'weekend-daytime' },
+      ],
+    });
+    const runIn = find(results, 'race-run-in')[0];
+
+    expect(runIn?.breached).toBe(true);
+    expect(runIn?.blocking).toBe(false);
+    expect(runIn?.overridable).toBe(true);
+    expect(runIn?.detail).toContain('18 km on 2026-10-18');
+  });
+
+  it('exempts the marathon itself, which would otherwise breach a ceiling of zero', () => {
+    const results = evaluateGuardrails({
+      window: [
+        {
+          date: '2026-10-24',
+          km: 42.195,
+          kind: 'race',
+          slot: 'weekend-daytime',
+        },
+      ],
+    });
+    const runIn = find(results, 'race-run-in')[0];
+
+    expect(runIn?.breached).toBe(false);
+    expect(runIn?.observed).toBe(0);
+  });
+
+  it('does not bind outside the final fortnight', () => {
+    // A 27 km long run on 2026-09-27 is 27 days out. A rule that fired there
+    // would be refusing the build phase.
+    const results = evaluateGuardrails({
+      window: [
+        { date: '2026-09-27', km: 27, kind: 'long', slot: 'weekend-daytime' },
+      ],
+    });
+    const runIn = find(results, 'race-run-in')[0];
+
+    expect(runIn?.breached).toBe(false);
+    expect(runIn?.coverage.days).toBe(0);
+  });
+
   it('does not invent a shortage of running days from a window that only sees part of a week', () => {
     // Three visible days is not a five-day week. A partial view must never
     // manufacture a breach -- that is how a correct plan gets refused.

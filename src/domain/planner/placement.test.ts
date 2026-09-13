@@ -129,6 +129,72 @@ describe('session placement', () => {
     ).toBe(false);
   });
 
+  it('steps the run-in down day by day into the goal marathon', () => {
+    // THE REGRESSION THIS FILE WAS MISSING. Race week came out 16 / 16 / rest /
+    // rest into a Saturday marathon: the 32 km target spread evenly across the
+    // only two days rest-day selection had left open, three and four days out.
+    //
+    // Literal kilometres rather than figures read back out of
+    // GUARDRAILS.raceRunIn, because computing the expectation from the config
+    // makes both sides move together -- the earlier version of the threshold
+    // tests passed happily with the ceiling raised to 99.
+    const easy = planWeek(week(7))
+      .sessions.filter((s) => s.km > 0 && s.kind !== 'race')
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    expect(easy.map((s) => [s.date, s.km])).toEqual([
+      ['2026-10-20', 11],
+      ['2026-10-21', 9],
+      ['2026-10-22', 7],
+      ['2026-10-23', 5],
+    ]);
+  });
+
+  it('keeps running on the two days before the marathon instead of resting them', () => {
+    // The half of the fault the distances alone do not show. Thursday and
+    // Friday were REST days while Tuesday carried 16 km -- volume stacked four
+    // days out and frequency dropped in the week the evidence is most insistent
+    // it be held (docs/research/training-evidence-quantified.json rank 4:
+    // "intensity and running frequency held").
+    const dates = new Set(
+      planWeek(week(7))
+        .sessions.filter((s) => s.km > 0)
+        .map((s) => s.date),
+    );
+
+    expect(dates.has('2026-10-22')).toBe(true);
+    expect(dates.has('2026-10-23')).toBe(true);
+    expect(dates.size).toBe(5);
+  });
+
+  it('treats minRunDays as a floor, opening days rather than cramming the target', () => {
+    // Race week declares three. The planner used to read that as "exactly
+    // three" and hand the leftover kilometres to the days nearest the race.
+    const plan = planWeek(week(7));
+    const runDays = new Set(
+      plan.sessions.filter((s) => s.km > 0).map((s) => s.date),
+    ).size;
+
+    expect(week(7).minRunDays).toBe(3);
+    expect(runDays).toBeGreaterThan(week(7).minRunDays);
+    expect(plan.shortfallKm).toBe(0);
+  });
+
+  it('does not reshape the weeks the run-in does not reach', () => {
+    // The other half of a ceiling: it must bite where the rule was being broken
+    // and nowhere else. Weeks 5 and 6 sit inside the final fortnight and their
+    // easy days are already under it, so adding the ceiling must leave them
+    // exactly as they were -- including week 5's deliberate 80 km of MIDWEEK
+    // volume, which a taper ramp applied to every race would have gutted.
+    expect(
+      planWeek(week(5))
+        .sessions.filter((s) => s.kind === 'easy')
+        .map((s) => s.km),
+    ).toEqual([12.8, 12.8, 12.8, 12.8, 12.8]);
+    expect(planWeek(week(6)).placedKm).toBe(60);
+    expect(planWeek(week(3)).placedKm).toBe(80);
+  });
+
   it('holds only the rolling window the config asks for, in date order', () => {
     const window = planWindow('2026-09-21');
     const dates = window.map((s) => s.date);

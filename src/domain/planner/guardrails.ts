@@ -24,11 +24,13 @@
 
 import {
   ACTIVE_RAMP_CAP_PCT,
+  BLOCK,
   BLOCK_WEEKS,
   GUARDRAILS,
   LIVE_RACE_DATES,
   MEASURED_BASE,
   READINESS,
+  raceRunInCeilingKm,
   singleSessionSpikes,
 } from '../../../config/training';
 import { daysBetweenIso, mondayOf, shiftIso, weekDates } from './dates';
@@ -72,6 +74,7 @@ export function evaluateGuardrails(
     ...spikeRule(input),
     ...qualitySpacingRules(input.window),
     ...sorenessRule(input),
+    ...raceRunInRule(input),
   ];
 }
 
@@ -547,6 +550,67 @@ function windowCoverage(window: PlanWindow): GuardrailResult['coverage'] {
 
 function sum(values: readonly number[]): number {
   return values.reduce((total, v) => total + v, 0);
+}
+
+/**
+ * The run-in to the goal race: a single session against how close to race day it
+ * sits, rather than a week against its target.
+ *
+ * ADVISORY, NEVER A BLOCKER, for the same structural reason as the single-session
+ * spike. Week 6's 18 km long run on 2026-10-18 is six days out and over the
+ * 13 km the research asks for inside the final fortnight. That distance is a
+ * ratified `BLOCK_WEEKS` decision, so a blocking version would refuse the taper
+ * the config itself authored -- and a guardrail overridden every week is
+ * repealed in practice. It is named and costed instead.
+ *
+ * `placement.distribute()` shapes easy volume so this never fires on a generated
+ * week. What reaches here is therefore what the planner did NOT choose: a
+ * ratified long run, or an athlete's own edit through the negotiation surface.
+ *
+ * Races are exempt by declaration -- the distance was entered months ago and is
+ * not a planner decision to smooth. That includes the marathon itself, which
+ * would otherwise breach a ceiling of zero on its own day.
+ */
+function raceRunInRule(input: GuardrailInput): GuardrailResult[] {
+  const from = shiftIso(
+    BLOCK.goalRaceDate,
+    -GUARDRAILS.raceRunIn.fortnightDays,
+  );
+  const visible = input.window.filter(
+    (s) => s.date >= from && s.date <= BLOCK.goalRaceDate,
+  );
+
+  const breaches = visible
+    .filter((s) => s.kind !== 'race' && s.km > 0)
+    .flatMap((s) => {
+      const ceiling = raceRunInCeilingKm(s.date);
+      if (ceiling === null || s.km <= ceiling + EPSILON_KM) return [];
+      return [{ session: s, ceiling }];
+    })
+    .sort((a, b) => b.session.km - a.session.km);
+
+  const worst = breaches[0];
+
+  return [
+    {
+      ruleId: 'race-run-in',
+      scope: `run-in from ${from}`,
+      threshold: 0,
+      observed: breaches.length,
+      unit: 'sessions',
+      breached: breaches.length > 0,
+      blocking: false,
+      overridable: true,
+      coverage: {
+        from,
+        to: BLOCK.goalRaceDate,
+        days: new Set(visible.map((s) => s.date)).size,
+      },
+      detail: worst
+        ? `${breaches.length} session(s) in the last ${GUARDRAILS.raceRunIn.fortnightDays} days before ${BLOCK.goalRace} run longer than the run-in allows. Worst: ${worst.session.km} km on ${worst.session.date} against a ${worst.ceiling} km ceiling ${daysBetweenIso(worst.session.date, BLOCK.goalRaceDate)} days out.`
+        : `Nothing inside the last ${GUARDRAILS.raceRunIn.fortnightDays} days before ${BLOCK.goalRace} runs longer than the run-in allows.`,
+    },
+  ];
 }
 
 export function round1(value: number): number {

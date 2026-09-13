@@ -21,6 +21,7 @@ import {
   RACES,
   READINESS,
   REPLAN,
+  raceRunInCeilingKm,
 } from '../../../config/training';
 import { round1 } from './guardrails';
 import {
@@ -115,13 +116,37 @@ export function planWeek(
     options.previousHardDate !== undefined
       ? options.previousHardDate
       : previousWeekHardDate(week);
-  const restDates = chooseRestDates(
-    dates,
-    hard,
-    7 - wantedRunDays,
-    previousHardDate,
-  );
-  const runDates = dates.filter((d) => !hardDates.has(d) && !restDates.has(d));
+
+  // Only the long session spends the week's target. A race the week does NOT
+  // name as carrying its long session is ADDITIONAL to the target -- week 7's
+  // 32 km is "easy running Monday to Friday, EXCLUDING the 42.195 of the race
+  // itself" in the config's own words, and netting the marathon out of the
+  // target is how race week ended up with no running in it at all.
+  const remainingKm = Math.max((week.targetKm ?? 0) - (week.longRunKm ?? 0), 0);
+
+  // `minRunDays` is a FLOOR, and was being read as an exact count. Race week
+  // declares three, which left two open days to absorb 32 km -- so the run-in
+  // ceilings below capped each of them and the overflow had nowhere to go.
+  // Opening another day is a smaller intervention than either stacking 16 km
+  // three days out or silently dropping five kilometres, so the week gives
+  // days back until the volume fits, never going below the mandatory
+  // rest-or-swim day.
+  let restCount = 7 - wantedRunDays;
+  let restDates = chooseRestDates(dates, hard, restCount, previousHardDate);
+  let runDates = dates.filter((d) => !hardDates.has(d) && !restDates.has(d));
+  while (
+    restCount > GUARDRAILS.minRestOrSwimOnlyDaysPerWeek &&
+    dayCapacityKm(runDates, open) < remainingKm - 0.05
+  ) {
+    restCount -= 1;
+    restDates = chooseRestDates(dates, hard, restCount, previousHardDate);
+    runDates = dates.filter((d) => !hardDates.has(d) && !restDates.has(d));
+  }
+  if (restCount < 7 - wantedRunDays) {
+    notes.push(
+      `Opened ${7 - wantedRunDays - restCount} day(s) above the ${week.minRunDays} this week asks for, because ${remainingKm} km does not fit the remaining days under the run-in ceilings. minRunDays is a floor.`,
+    );
+  }
 
   /* --- quality, where the spacing rules allow one ----------------------- */
 
@@ -137,12 +162,6 @@ export function planWeek(
 
   /* --- the remaining kilometres, spread by slot capacity ---------------- */
 
-  // Only the long session spends the week's target. A race the week does NOT
-  // name as carrying its long session is ADDITIONAL to the target -- week 7's
-  // 32 km is "easy running Monday to Friday, EXCLUDING the 42.195 of the race
-  // itself" in the config's own words, and netting the marathon out of the
-  // target is how race week ended up with no running in it at all.
-  const remainingKm = Math.max((week.targetKm ?? 0) - (week.longRunKm ?? 0), 0);
   const spread = distribute(remainingKm, runDates, open);
   const slotUse = new Map<string, number>();
 
@@ -382,12 +401,7 @@ function distribute(
   open: readonly SlotOpening[],
 ): { byDate: Map<string, number> } {
   const byDate = new Map(runDates.map((d) => [d, 0]));
-  const capacity = new Map(
-    runDates.map((d) => [
-      d,
-      open.filter((o) => o.date === d).reduce((total, o) => total + o.maxKm, 0),
-    ]),
-  );
+  const capacity = new Map(runDates.map((d) => [d, dayCapacityKm([d], open)]));
 
   let remaining = totalKm;
   for (
@@ -412,6 +426,32 @@ function distribute(
   for (const [date, km] of byDate) byDate.set(date, round1(km));
 
   return { byDate };
+}
+
+/**
+ * What a set of days will hold: their slots, further capped by the run-in to the
+ * goal race.
+ *
+ * The run-in ceiling caps the DAY, not each slot. Capping per slot would let a
+ * morning and an evening add up to twice the ceiling on the Thursday before the
+ * marathon -- which is the same 16 km, split in two, and no easier on the legs.
+ *
+ * Long runs and races never reach here: `hardSessions()` places those at the
+ * distance `BLOCK_WEEKS` chose, and shrinking a ratified long run to satisfy a
+ * ceiling derived from research would be the tail wagging the dog. The
+ * `race-run-in` guardrail reports those as advisory breaches instead.
+ */
+function dayCapacityKm(
+  dates: readonly string[],
+  open: readonly SlotOpening[],
+): number {
+  return dates.reduce((total, date) => {
+    const slots = open
+      .filter((o) => o.date === date)
+      .reduce((km, o) => km + o.maxKm, 0);
+    const ceiling = raceRunInCeilingKm(date);
+    return total + (ceiling === null ? slots : Math.min(slots, ceiling));
+  }, 0);
 }
 
 /**
