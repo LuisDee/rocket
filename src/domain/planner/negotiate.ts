@@ -14,7 +14,12 @@
  * change, so accepting it is one more call rather than a re-negotiation.
  */
 
-import { BLOCK_WEEKS, RACES, REPLAN } from '../../../config/training';
+import {
+  BLOCK_WEEKS,
+  RACES,
+  READINESS,
+  REPLAN,
+} from '../../../config/training';
 import { humanDate, mondayOf, shiftIso, weekDates } from './dates';
 import {
   evaluateGuardrails,
@@ -353,6 +358,12 @@ function repair(
       return absorbSpanner(window, trigger.date, trigger.km);
 
     case 'soreness':
+      // The threshold is checked HERE as well as by whoever raised the trigger.
+      // It used to be checked in neither place, so a 1/5 niggle reported on an
+      // amber morning took out the week's only hard session -- a repair firing
+      // below the severity its own config says gates quality
+      // (`READINESS.sorenessBlocksQuality`).
+      if (trigger.severity < READINESS.sorenessBlocksQuality) return window;
       return sorted(
         window.map((s) =>
           s.kind === 'quality' && s.date >= trigger.since
@@ -530,9 +541,7 @@ function replanWeekWithout(
 
   const placement: PlacementOptions = {
     unavailable: [{ date, slotId }],
-    ...(options.soreness
-      ? { sorenessSeverity: options.soreness.severity }
-      : {}),
+    ...(options.soreness ? { soreness: options.soreness } : {}),
   };
   const replanned = planWeek(week, placement).sessions;
   const inWindow = new Set(window.map((s) => s.date));

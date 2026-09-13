@@ -31,13 +31,29 @@
  * 23.5 s/km without one of them being edited.
  */
 
-import { BLOCK, PRESCRIPTION, RACES, STRENGTH } from '../../../config/training';
+import {
+  BLOCK,
+  PRESCRIPTION,
+  RACES,
+  READINESS,
+  STRENGTH,
+} from '../../../config/training';
 import { shiftIso } from './dates';
 import type { PlannedSession } from './types';
 
 export type StrengthKind = (typeof STRENGTH.split)[number];
 export type Zone =
   'recovery' | 'easy' | 'marathon' | 'threshold' | 'race' | 'rest';
+
+/**
+ * The morning check-in's verdict, as the planner needs it: how sore, and from
+ * when. Built by `today.gateFromCheckIn`, which owns the thresholds.
+ */
+export type Gate = {
+  readonly severity: number;
+  /** The day the reading was taken. The gate binds from here forward only. */
+  readonly since: string;
+};
 
 /** A placed session, decorated with what to actually do. */
 export type Described = PlannedSession & {
@@ -53,6 +69,21 @@ export type Described = PlannedSession & {
   readonly race: string | null;
   readonly what: string;
   readonly why: string | null;
+  /**
+   * What a check-in took away, and why. Null when nothing was gated.
+   *
+   * Filled by `today.prescribeWeek`, which is the only caller that holds both the
+   * gated and the ungated week and can therefore see the difference.
+   * `describeWeek` always leaves it null: a decorator cannot know what it was not
+   * given. REVERSIBLE by construction -- the original zone and its prescription
+   * are carried forward rather than overwritten, so the athlete can see what he
+   * was originally handed and decide for himself.
+   */
+  readonly demoted: {
+    readonly fromZone: Zone;
+    readonly fromWhat: string;
+    readonly reason: string;
+  } | null;
 };
 
 /** The subset of a block week this module reads. */
@@ -116,7 +147,12 @@ function thresholdStructure(kmOfWork: number, phase: string): string {
 export function describeWeek(
   week: WeekFacts,
   sessions: readonly PlannedSession[],
+  gate: Gate | null = null,
 ): Described[] {
+  const gated = (date: string) =>
+    gate !== null &&
+    gate.severity >= READINESS.sorenessBlocksQuality &&
+    date >= gate.since;
   const hasRace = sessions.some((s) => raceOn(s.date) !== null);
   const tKm = thresholdKmFor(week, hasRace);
   const mpKm = longRunMpKm(week);
@@ -134,6 +170,7 @@ export function describeWeek(
       mpKm: 0,
       thresholdKm: 0,
       strides: 0,
+      demoted: null,
     };
 
     if (race !== null) {
@@ -187,12 +224,18 @@ export function describeWeek(
       };
     }
 
-    const strides = PRESCRIPTION.strides.count;
+    // Strides are 5 km-effort accelerations, which is quality by any definition
+    // that matters to a sore tendon -- and the research prescribing them says so
+    // in as many words: "Skip if soreness >= 3 (rocket's existing gate)".
+    const strides = gated(s.date) ? 0 : PRESCRIPTION.strides.count;
     return {
       ...base,
       zone: 'easy',
       strides,
-      what: `Easy, then ${String(strides)} x ${String(PRESCRIPTION.strides.seconds)} s strides with walk-back recovery.`,
+      what:
+        strides === 0
+          ? 'Easy. No strides.'
+          : `Easy, then ${String(strides)} x ${String(PRESCRIPTION.strides.seconds)} s strides with walk-back recovery.`,
       why: null,
     };
   });

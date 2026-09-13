@@ -190,6 +190,23 @@ describe('scenario: the tumble dryer -- severe DOMS', () => {
   it('does not cut the easy volume the athlete can still run', () => {
     expect(totalKm(result.resulting_window)).toBe(totalKm(window));
   });
+
+  it('leaves the week alone for a niggle below the gate', () => {
+    // REGRESSION. The repair downgraded quality on ANY severity, so a 1/5 niggle
+    // reported on an amber morning took out the week's only hard session -- a
+    // repair firing below the threshold its own config says gates quality. The
+    // gate is a number, not the presence of a reading.
+    const light = replan(window, {
+      kind: 'soreness',
+      severity: READINESS.sorenessBlocksQuality - 1,
+      since: '2026-09-22',
+    });
+
+    expect(light.resulting_window).toEqual(window);
+    expect(
+      light.resulting_window.filter((s) => s.kind === 'quality'),
+    ).not.toEqual([]);
+  });
 });
 
 describe('scenario: a race added mid-block', () => {

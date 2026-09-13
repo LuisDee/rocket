@@ -2,8 +2,7 @@ import Link from 'next/link';
 
 import { BLOCK, RACES } from '../../config/training';
 import { derivePaces } from '../domain/paces';
-import { planWeek } from '../domain/planner/placement';
-import { describeWeek } from '../domain/planner/prescribe';
+import { gateFromCheckIn, prescribeWeek } from '../domain/planner/today';
 import { scoreReadiness } from '../domain/readiness';
 import { postgresStore } from '../domain/store';
 import { blockTotals, weekEnd, weeklyActuals } from '../lib/actuals';
@@ -59,20 +58,22 @@ export default async function Today() {
     pendingCount().catch(() => 0),
   ]);
 
-  const plan = week === null ? null : planWeek(week);
-  // Placement decides which day and how far; description decides what the
-  // session IS. Until 2026-09-12 the screen showed only the first half of that,
-  // so a "quality" day arrived as a bare word with a distance beside it.
-  const described =
-    week === null || plan === null ? [] : describeWeek(week, plan.sessions);
+  // Placement decides which day and how far, description decides what the session
+  // IS, and the check-in decides whether he is fit to do it. All three compose in
+  // `prescribeWeek`, which every surface calls -- the screen used to assemble the
+  // first two itself and pass the third no further than a sentence of copy, so it
+  // rendered THRESHOLD and a threshold pace band under "Quality work is gated
+  // today".
+  const gate = gateFromCheckIn(checkIn, today);
+  const plan = week === null ? null : prescribeWeek(week, gate);
+  const described = plan?.sessions ?? [];
   const paces = derivePaces();
   const todaySession = described.find((s) => s.date === today) ?? null;
   const todayPace =
     todaySession && todaySession.zone !== 'rest' && todaySession.zone !== 'race'
       ? paces[todaySession.zone]
       : null;
-  const yesterdaySession =
-    plan?.sessions.find((s) => s.date === yesterday) ?? null;
+  const yesterdaySession = described.find((s) => s.date === yesterday) ?? null;
   const yesterdayActual = runs
     .filter((r) => r.date === yesterday)
     .reduce((sum, r) => sum + r.km, 0);
@@ -178,6 +179,19 @@ export default async function Today() {
                 {todaySession.why}
               </p>
             ) : null}
+            {/* The demotion is REVERSIBLE, so it shows what it replaced. A gate
+                that silently rewrites the session is one he cannot argue with. */}
+            {todaySession.demoted ? (
+              <div className="mt-2.5 rounded-lg bg-rose-500/10 px-3 py-2 ring-1 ring-rose-500/25">
+                <p className="text-sm leading-relaxed text-rose-200">
+                  {todaySession.demoted.reason}
+                </p>
+                <p className="mt-1.5 text-xs leading-relaxed text-rose-300/60">
+                  Was {todaySession.demoted.fromZone}:{' '}
+                  {todaySession.demoted.fromWhat}
+                </p>
+              </div>
+            ) : null}
             {todaySession.gym ? (
               <p className="mt-2.5 border-t border-zinc-800 pt-2.5 text-sm leading-relaxed text-amber-300">
                 Gym: {todaySession.gym}
@@ -225,7 +239,9 @@ export default async function Today() {
             </p>
             {readiness.qualityBlocked ? (
               <p className="mt-2 text-sm text-rose-300">
-                Quality work is gated today.
+                {gate === null
+                  ? 'Soreness gates quality, but this reading is too old to act on. Check in again.'
+                  : "Quality work is gated, and today's session above has been changed."}
               </p>
             ) : null}
             {/* REDLINES rule 4: a verdict on thin data states its own

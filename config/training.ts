@@ -800,8 +800,43 @@ export const READINESS = {
   greenFloor: 0.7,
   amberFloor: 0.45,
 
-  /** Soreness at or above this severity (1-5) blocks all quality work. */
+  /**
+   * Soreness at or above this severity (1-5) blocks all quality work.
+   *
+   * It gates STRIDES too, on the same number.
+   * `docs/research/session-prescription-design.json` prescribes "6 x 20 s at
+   * ~3:50/km feel, on Tuesday and Friday easy runs. Skip if soreness >= 3
+   * (rocket's existing gate)" -- strides are 5 km-effort accelerations, which is
+   * quality by any definition that matters to a sore tendon.
+   *
+   * WHAT IT DELIBERATELY DOES NOT DO IS CUT DISTANCE. The same research is
+   * explicit that "intensity is cut before volume -- the volume ramp is the
+   * ratified experiment; the intensity plan is the buffer around it, so the
+   * buffer is spent first", and it puts a volume cut behind TWO channels tripped
+   * for SEVEN CONSECUTIVE DAYS, not behind one sore morning. An earlier version
+   * of `tasks/readiness-acts.md` asked for a distance cap on this threshold; the
+   * evidence says that is the wrong lever and it is not implemented. Recorded
+   * here rather than in a commit message, because the next person to read this
+   * field will otherwise add it.
+   */
   sorenessBlocksQuality: 3,
+
+  /**
+   * A check-in older than this governs nothing.
+   *
+   * The gate used to have no expiry, so one sore morning would have silenced
+   * every quality session for the rest of the block if he never checked in
+   * again. A check-in is a daily instrument and a reading is about the day it was
+   * taken; absence of a fresh reading is not a green light, but it is not
+   * evidence of soreness either, and the honest response to a stale reading is
+   * to say it is stale rather than to keep acting on it.
+   *
+   * PROVISIONAL. 1 means the reading governs its own day and the next, which is
+   * a guess at how long his soreness persists rather than a measurement. What
+   * would settle it: severity against the same location on consecutive days,
+   * which `check_ins.soreness` already stores and nothing has yet read.
+   */
+  checkInStaleAfterDays: 1,
 
   /**
    * The ranges `subjectiveWeights` has always implied and nothing ever stated.

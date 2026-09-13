@@ -38,7 +38,13 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { GUARDRAILS, LOAD, REPLAN, SYNC } from '../../config/training';
+import {
+  GUARDRAILS,
+  LOAD,
+  READINESS,
+  REPLAN,
+  SYNC,
+} from '../../config/training';
 import { dailyStress, rollingLoad, type LoadState } from '../domain/load';
 import { shiftIso } from '../domain/planner/dates';
 import { replan, type ReplanTrigger } from '../domain/planner/negotiate';
@@ -295,23 +301,30 @@ async function evaluateTriggers(
     const historyDays = await store.activityHistoryDays(today);
     const verdict = scoreReadiness(checkIn, historyDays);
     const severity = worstSoreness(checkIn.soreness);
-    const actionable = verdict.band !== 'green' && severity !== null;
-    if (actionable) {
+
+    // SORENESS ALONE DECIDES, and the band does not get a veto. This used to
+    // read `verdict.band !== 'green' && severity !== null`, which fails both
+    // ways: a calf at 3 beside nine hours' sleep, high motivation and an easy
+    // previous day scores 0.73 -- GREEN -- so the gate never fired on the one
+    // signal that is about tissue; and any reading at all on an amber morning
+    // fired it, so a 1/5 niggle after a bad night took out the week's only hard
+    // session. The injury gate is a threshold on severity
+    // (`READINESS.sorenessBlocksQuality`), not a mood composite.
+    const gated =
+      severity !== null && severity >= READINESS.sorenessBlocksQuality;
+    if (gated) {
       fired.push({ kind: 'soreness', severity, since: checkIn.localDate });
     }
     reports.push({
       id: 'readiness',
-      fired: actionable,
-      detail:
-        verdict.band === 'green'
-          ? `green (${String(verdict.score)})`
-          : actionable
-            ? `${verdict.band} with soreness ${String(severity)} -- quality downgraded from ${checkIn.localDate}`
-            : // The planner repairs what it has a repair FOR. An amber driven by
-              // sleep or motivation alone has no session-level fix that is not
-              // guesswork, so it is surfaced for the conversation instead of
-              // being auto-applied. Reported rather than omitted.
-              `${verdict.band} with no soreness reading -- surfaced, not auto-repaired`,
+      fired: gated,
+      detail: gated
+        ? `soreness ${String(severity)} at or above ${String(READINESS.sorenessBlocksQuality)} -- quality gated from ${checkIn.localDate} (band ${verdict.band}, ${String(verdict.score)})`
+        : // The planner repairs what it has a repair FOR. An amber driven by
+          // sleep or motivation alone has no session-level fix that is not
+          // guesswork, so it is surfaced for the conversation instead of being
+          // auto-applied. Reported rather than omitted.
+          `${verdict.band} (${String(verdict.score)}), soreness ${severity === null ? 'not reported' : String(severity)} -- below the quality gate, surfaced not auto-repaired`,
     });
   }
 
