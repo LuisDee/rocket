@@ -49,4 +49,4 @@ shape; `applyTriggers` signature.
 
 ## Commits
 
-- `PENDING` fix(cron): let the planner write a plan, and repair the day it means to
+- `59cbe9a` fix(cron): let the planner write a plan, and repair the day it means to

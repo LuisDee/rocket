@@ -69,9 +69,8 @@ needs the same trailing-mean machinery. Registered there rather than dropped.
 - [x] soreness alone decides, in both directions -- the cron's green-band veto and
       the repair's missing threshold were both wrong
 - [x] test: red morning demotes, green morning is byte-identical to no check-in
-- [ ] the cron's rollover regenerates from config without the standing gate, so it
-      can restore a downgraded session days later (audit
-      `rollover-silently-restores-a-downgraded-quality-session`)
+- [x] the cron's rollover now carries the standing gate -- `59cbe9a`, see
+      `tasks/the-stored-plan-is-real.md`
 
 ## Commits
 
