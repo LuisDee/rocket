@@ -75,4 +75,4 @@ needs the same trailing-mean machinery. Registered there rather than dropped.
 
 ## Commits
 
-- `PENDING` feat(readiness): make a red morning change the session
+- `b0e5c12` feat(readiness): make a red morning change the session
