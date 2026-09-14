@@ -99,4 +99,4 @@ strides, and there was no way back from a page.
 
 - `5fd85fe` — feat: make Today the landing page, with planned versus actual from the database
 - `695fc1c` — docs: track the dual-source run bridge and the missing viewport sweep as gates
-- `PENDING` feat(app): a tab bar on every page, and every day's session one tap away
+- `2a90bae` feat(app): a tab bar on every page, and every day's session one tap away
