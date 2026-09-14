@@ -79,7 +79,24 @@ aggregation. No schema change, no config change, no domain change.
       sanctioned upload module passes while a Strava call anywhere else still
       fails. Not this branch's to resolve; the red clears when that lands.
 
+### 2026-09-14 follow-up: navigation and the hidden session content
+
+Reported by Luis from the installed app: today showed "7.6" with no sign of the
+strides, and there was no way back from a page.
+
+- [x] Fixed tab bar on every page (Today / Check in / Block / Runs). The app
+      installs standalone, so there is no browser back button; `/checkin` linked
+      nowhere, and the Runs page's back link read "Block" while going to Today.
+- [x] Week rows show a one-line summary (`Described.summary`) and expand on tap
+      to the full session, reason and gym slot.
+- [x] "What's a stride?" explainer on today's card when strides are prescribed.
+- [x] Viewport gate extended: an audit with every disclosure open (a closed
+      `<details>` has no layout, so the old sweep measured nothing inside it --
+      proved by an overflow the closed sweep passed), and a tab-bar check on
+      every route. Both mutations caught.
+
 ## Commits
 
 - `5fd85fe` — feat: make Today the landing page, with planned versus actual from the database
 - `695fc1c` — docs: track the dual-source run bridge and the missing viewport sweep as gates
+- `PENDING` feat(app): a tab bar on every page, and every day's session one tap away

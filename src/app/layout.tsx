@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
+import { TabBar } from './tab-bar';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -38,7 +39,12 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       lang="en-GB"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-zinc-950 text-zinc-100">{children}</body>
+      {/* Bottom padding clears the fixed tab bar (h-14) plus the home-indicator
+          inset, so the last card on every page is never hidden under it. */}
+      <body className="min-h-full bg-zinc-950 pb-[calc(3.5rem+env(safe-area-inset-bottom))] text-zinc-100">
+        {children}
+        <TabBar />
+      </body>
     </html>
   );
 }

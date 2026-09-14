@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { BLOCK, RACES } from '../../config/training';
+import { BLOCK, PRESCRIPTION, RACES } from '../../config/training';
 import { derivePaces } from '../domain/paces';
 import { scoreReadiness } from '../domain/readiness';
 import { postgresStore } from '../domain/store';
@@ -182,6 +182,42 @@ export default async function Today() {
             <p className="mt-2.5 border-t border-zinc-800 pt-2.5 text-sm leading-relaxed text-zinc-300">
               {todaySession.what}
             </p>
+            {todaySession.strides > 0 ? (
+              <details className="group mt-1">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center text-sm text-sky-300 [&::-webkit-details-marker]:hidden">
+                  What&rsquo;s a stride?
+                  <span
+                    aria-hidden
+                    className="ml-1.5 transition-transform group-open:rotate-90"
+                  >
+                    &rsaquo;
+                  </span>
+                </summary>
+                <div className="space-y-2 pb-1 text-sm leading-relaxed text-zinc-400">
+                  <p>
+                    A short, relaxed burst of fast running after the easy run,
+                    while your legs are warm. Not a sprint.
+                  </p>
+                  <p>
+                    Run {PRESCRIPTION.strides.seconds} s on a flat stretch:
+                    build up smoothly for the first few seconds, hold quick and
+                    loose, then ease off. Roughly 5K race effort &mdash; you
+                    should finish each one feeling you could do another straight
+                    away.
+                  </p>
+                  <p>
+                    Walk back to the start until your breathing settles, then go
+                    again. {todaySession.strides} in total, and the last should
+                    feel like the first.
+                  </p>
+                  <p className="text-zinc-500">
+                    Why: weeks of slow running flatten your stride. These keep
+                    your legs used to turning over quickly, at almost no fatigue
+                    cost.
+                  </p>
+                </div>
+              </details>
+            ) : null}
             {todaySession.why ? (
               <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">
                 {todaySession.why}
@@ -307,45 +343,62 @@ export default async function Today() {
                 .reduce((sum, r) => sum + r.km, 0);
               const dow = DAY[(parseIsoDate(s.date).getDay() + 6) % 7];
               return (
-                <li
-                  key={s.date}
-                  className={[
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 ring-1',
-                    isToday
-                      ? 'bg-sky-500/10 ring-sky-500/40'
-                      : 'bg-zinc-900/40 ring-zinc-800/70',
-                  ].join(' ')}
-                >
-                  <span className="w-8 shrink-0 font-mono text-xs text-zinc-500">
-                    {dow}
-                  </span>
-                  <span
+                <li key={`${s.date}-${s.slot ?? 'none'}`}>
+                  {/* Tap a day for the whole session. The row alone used to
+                      read "EASY 7.6", which hid the strides entirely. */}
+                  <details
                     className={[
-                      'shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider ring-1',
-                      KIND_STYLE[s.kind] ??
-                        'bg-zinc-800 text-zinc-300 ring-zinc-700',
+                      'group rounded-lg ring-1',
+                      isToday
+                        ? 'bg-sky-500/10 ring-sky-500/40'
+                        : 'bg-zinc-900/40 ring-zinc-800/70',
                     ].join(' ')}
                   >
-                    {s.kind}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-xs text-zinc-500">
-                    {s.note ?? ''}
-                  </span>
-                  <span className="shrink-0 font-mono text-sm tabular-nums">
-                    {actual > 0 ? (
-                      <span className="text-emerald-300">
-                        {actual.toFixed(1)}
+                    <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
+                      <span className="w-8 shrink-0 font-mono text-xs text-zinc-500">
+                        {dow}
                       </span>
-                    ) : null}
-                    {actual > 0 ? (
-                      <span className="text-zinc-600">/</span>
-                    ) : null}
-                    <span
-                      className={actual > 0 ? 'text-zinc-500' : 'text-zinc-200'}
-                    >
-                      {s.km > 0 ? s.km : '—'}
-                    </span>
-                  </span>
+                      <span
+                        className={[
+                          'shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider ring-1',
+                          KIND_STYLE[s.kind] ??
+                            'bg-zinc-800 text-zinc-300 ring-zinc-700',
+                        ].join(' ')}
+                      >
+                        {s.kind}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-xs text-zinc-400">
+                        {s.summary}
+                      </span>
+                      <span className="shrink-0 font-mono text-sm tabular-nums">
+                        {actual > 0 ? (
+                          <span className="text-emerald-300">
+                            {actual.toFixed(1)}
+                          </span>
+                        ) : null}
+                        {actual > 0 ? (
+                          <span className="text-zinc-600">/</span>
+                        ) : null}
+                        <span
+                          className={
+                            actual > 0 ? 'text-zinc-500' : 'text-zinc-200'
+                          }
+                        >
+                          {s.km > 0 ? s.km : '—'}
+                        </span>
+                      </span>
+                    </summary>
+                    <div className="space-y-1.5 border-t border-zinc-800/70 px-3 pb-3 pt-2.5 text-sm leading-relaxed">
+                      <p className="text-zinc-300">{s.what}</p>
+                      {s.why ? <p className="text-zinc-500">{s.why}</p> : null}
+                      {s.gym ? (
+                        <p className="text-amber-300">Gym: {s.gym}</p>
+                      ) : null}
+                      {s.demoted ? (
+                        <p className="text-rose-300">{s.demoted.reason}</p>
+                      ) : null}
+                    </div>
+                  </details>
                 </li>
               );
             })}
@@ -511,21 +564,6 @@ export default async function Today() {
           </ul>
         )}
       </section>
-
-      <nav className="mt-8 grid grid-cols-2 gap-2">
-        <Link
-          href="/block"
-          className="rounded-xl bg-zinc-900/60 px-4 py-3 text-center text-sm text-zinc-300 ring-1 ring-zinc-800 active:bg-zinc-900"
-        >
-          The block
-        </Link>
-        <Link
-          href="/activities"
-          className="rounded-xl bg-zinc-900/60 px-4 py-3 text-center text-sm text-zinc-300 ring-1 ring-zinc-800 active:bg-zinc-900"
-        >
-          Crop queue
-        </Link>
-      </nav>
 
       {nextRace === undefined ? null : (
         <p className="mt-6 text-center text-xs text-zinc-500">

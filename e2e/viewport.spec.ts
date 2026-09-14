@@ -259,6 +259,54 @@ for (const route of STATIC_ROUTES) {
 }
 
 /**
+ * The same sweep with every disclosure OPEN.
+ *
+ * The week list and the stride explainer hide their content inside `<details>`,
+ * and a closed disclosure's content has no layout -- so the audit above measures
+ * nothing inside it and would pass an overflowing session description forever.
+ * Open them all, then audit what a tap actually reveals.
+ */
+test('/ renders within the viewport with every disclosure open', async ({
+  page,
+}) => {
+  await page.goto('/', { waitUntil: 'networkidle' });
+  const opened = await page.evaluate(() => {
+    const all = [...document.querySelectorAll('details')];
+    for (const d of all) d.open = true;
+    return all.length;
+  });
+  // Not vacuous: if the page stops rendering disclosures, this says so instead
+  // of auditing an empty set and passing.
+  expect(opened, 'no <details> found on /').toBeGreaterThan(0);
+
+  const findings = await page.evaluate(
+    ([tap, contrast]) => audit(tap as number, contrast as number),
+    [MIN_TAP_PX, MIN_CONTRAST],
+  );
+  const report = findings
+    .map((f) => `  [${f.rule}] ${f.selector}\n      ${f.detail}`)
+    .join('\n');
+  expect(findings, `/ (disclosures open)\n${report}`).toEqual([]);
+});
+
+test('every page carries the tab bar, and it names where you are', async ({
+  page,
+}) => {
+  // The app installs standalone, with no browser back button. A page without
+  // the bar is a dead end -- which is what /checkin was.
+  for (const route of STATIC_ROUTES) {
+    await page.goto(route, { waitUntil: 'networkidle' });
+    const nav = page.getByRole('navigation', { name: 'Main' });
+    await expect(nav, `${route} has no tab bar`).toBeVisible();
+    await expect(nav.getByRole('link')).toHaveCount(4);
+    await expect(
+      nav.locator('[aria-current="page"]'),
+      `${route} does not mark its own tab`,
+    ).toHaveAttribute('href', route);
+  }
+});
+
+/**
  * One activity per status, sourced from the database rather than the list.
  *
  * The obvious approach -- scrape `a[href^="/activities/"]` off `/activities`

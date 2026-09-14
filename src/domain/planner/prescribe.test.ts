@@ -302,6 +302,44 @@ describe('strength placement', () => {
   });
 });
 
+describe('the one-line summary a week row shows', () => {
+  // The week list showed a kind and a distance and nothing else, so Monday read
+  // "EASY 7.6" while the session was 7.6 km AND six strides, and the threshold
+  // day read "QUALITY 7.6" with no sign of seven reps inside it. Luis noticed on
+  // the phone before any test did.
+  const byDate = (n: number, date: string) =>
+    described(n).find((s) => s.date === date);
+
+  it('names the strides on an easy day', () => {
+    expect(byDate(2, '2026-09-14')?.summary).toBe('Easy + 6 strides');
+  });
+
+  it('names the interval structure on the threshold day', () => {
+    expect(byDate(2, '2026-09-15')?.summary).toBe('7 x 4 min threshold');
+  });
+
+  it('names the marathon-pace finish on a long run', () => {
+    expect(byDate(3, '2026-09-27')?.summary).toBe('Long, last 8.1 km at MP');
+  });
+
+  it('names the race on a race day', () => {
+    expect(byDate(4, '2026-10-04')?.summary).toBe('Lincoln Half Marathon');
+  });
+
+  it('says rest on a rest day', () => {
+    expect(byDate(2, '2026-09-20')?.summary).toBe('Rest or swim');
+  });
+
+  it('drops the strides from the summary when a sore morning drops them', () => {
+    const w = blockWeek(2);
+    const gated = describeWeek(w, planWeek(w).sessions, {
+      severity: 4,
+      since: '2026-09-14',
+    });
+    expect(gated.find((s) => s.date === '2026-09-14')?.summary).toBe('Easy');
+  });
+});
+
 describe('strides', () => {
   it('puts strides on easy days and nowhere else', () => {
     for (const w of BLOCK_WEEKS) {

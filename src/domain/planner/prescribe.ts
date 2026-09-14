@@ -68,6 +68,12 @@ export type Described = PlannedSession & {
   readonly gym: string | null;
   readonly race: string | null;
   readonly what: string;
+  /**
+   * The session in a handful of words, for a row in a list. `what` is the whole
+   * instruction; this is what fits beside a distance on a phone -- the week list
+   * used to show only "EASY 7.6", which hid the strides entirely.
+   */
+  readonly summary: string;
   readonly why: string | null;
   /**
    * What a check-in took away, and why. Null when nothing was gated.
@@ -131,11 +137,13 @@ function raceOn(date: string): string | null {
  * Rep length grows through the block while the total stays capped: the same
  * dose in longer continuous efforts asks progressively more of the same system.
  */
-function thresholdStructure(kmOfWork: number, phase: string): string {
+function thresholdReps(
+  kmOfWork: number,
+  phase: string,
+): { reps: number; repMin: number } {
   const repMin = phase === 'rebuild' ? 4 : phase === 'taper' ? 5 : 6;
   const perRepKm = (repMin * 205) / 1000;
-  const reps = Math.max(3, Math.round(kmOfWork / perRepKm));
-  return `${String(reps)} x ${String(repMin)} min at threshold, 90 s jog between`;
+  return { reps: Math.max(3, Math.round(kmOfWork / perRepKm)), repMin };
 }
 
 /**
@@ -182,6 +190,7 @@ export function describeWeek(
           week.phase === 'peak'
             ? `${race}: warm up, the race AT MARATHON PACE, then easy. NOT RACED.`
             : `${race}.`,
+        summary: race,
         why:
           week.phase === 'peak'
             ? 'Turns a race that would otherwise wreck peak week into the block’s most marathon-specific session.'
@@ -194,6 +203,7 @@ export function describeWeek(
         ...base,
         zone: 'rest',
         what: 'Rest or swim. The swim carries no impact load.',
+        summary: 'Rest or swim',
         why: null,
       };
     }
@@ -207,6 +217,8 @@ export function describeWeek(
           mpKm > 0
             ? `${String(round1(s.km - mpKm))} km easy, then the final ${String(mpKm)} km at marathon pace.`
             : `${String(s.km)} km easy.`,
+        summary:
+          mpKm > 0 ? `Long, last ${String(mpKm)} km at MP` : 'Long, easy',
         why:
           mpKm > 0
             ? 'Marathon pace on tired legs is the session the race is actually specific to.'
@@ -215,11 +227,13 @@ export function describeWeek(
     }
 
     if (s.kind === 'quality' && tKm > 0) {
+      const { reps, repMin } = thresholdReps(tKm, week.phase);
       return {
         ...base,
         zone: 'threshold',
         thresholdKm: tKm,
-        what: `Warm up, then ${thresholdStructure(tKm, week.phase)}, then cool down. ${String(tKm)} km of work.`,
+        what: `Warm up, then ${String(reps)} x ${String(repMin)} min at threshold, 90 s jog between, then cool down. ${String(tKm)} km of work.`,
+        summary: `${String(reps)} x ${String(repMin)} min threshold`,
         why: 'The only hard running of the week. Its work-interval mean heart rate is also what validates the derived threshold pace.',
       };
     }
@@ -236,6 +250,7 @@ export function describeWeek(
         strides === 0
           ? 'Easy. No strides.'
           : `Easy, then ${String(strides)} x ${String(PRESCRIPTION.strides.seconds)} s strides with walk-back recovery.`,
+      summary: strides === 0 ? 'Easy' : `Easy + ${String(strides)} strides`,
       why: null,
     };
   });

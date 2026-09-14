@@ -20,13 +20,7 @@ export default async function ActivitiesPage() {
   return (
     <main className="mx-auto w-full max-w-2xl px-4 pb-16 pt-8 sm:px-6">
       <header>
-        <Link
-          href="/"
-          className="-my-3.5 inline-block py-3.5 text-xs text-zinc-500 hover:text-zinc-300"
-        >
-          &larr; Block
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Cropped</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Cropped</h1>
         <p className="mt-1 text-sm text-zinc-400">
           Runs pulled from Garmin, pauses removed, waiting on you.
         </p>

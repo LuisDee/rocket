@@ -1,5 +1,3 @@
-import Link from 'next/link';
-
 import { BLOCK, BLOCK_WEEKS, MEASURED_BASE } from '../../../config/training';
 import { blockTotals, weeklyActuals } from '../../lib/actuals';
 import {
@@ -36,14 +34,7 @@ export default async function Block() {
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 pb-16 pt-6 sm:px-6">
-      <Link
-        href="/"
-        className="-my-3.5 inline-block py-3.5 font-mono text-xs text-zinc-500 hover:text-zinc-300"
-      >
-        &larr; Today
-      </Link>
-
-      <header className="mt-4">
+      <header>
         <p className="font-mono text-xs uppercase tracking-widest text-zinc-500">
           Goal race
         </p>
