@@ -1,0 +1,69 @@
+
+== week 2 2026-09-14 target 60 -> total 60  spread 1.62  V1 True V2 True V3 True V4 True  km-monotony(excl race) 1.22  run-in breaches []
+   Mon 14 Sep       0  rest            easy-only window
+   Tue 15 Sep       8  recovery-first  easy-only window
+   Wed 16 Sep      13  medium          strides easy-only window
+   Thu 17 Sep       9  ga              strides easy-only window
+   Fri 18 Sep       8  recovery        easy-only window
+   Sat 19 Sep      22  hard            LEGS(earliest slot) easy-only window
+   Sun 20 Sep       0  rest            
+   note: no day clears quality spacing and post-race windows; week all easy
+
+== week 3 2026-09-21 target 80 -> total 80  spread 2.4  V1 True V2 True V3 True V4 True  km-monotony(excl race) 1.41  run-in breaches []
+   Mon 21 Sep      18  medium          strides
+   Tue 22 Sep     7.5  ga              
+   Wed 23 Sep      12  quality         LEGS(earliest slot)
+   Thu 24 Sep       0  rest            
+   Fri 25 Sep     7.5  ga              strides
+   Sat 26 Sep       8  recovery        
+   Sun 27 Sep      27  hard            
+   note: medium-long run 18.0 km on 2026-09-21
+
+== week 4 2026-09-28 target 100 -> total 100  spread 2.69  V1 True V2 True V3 True V4 True  km-monotony(excl race) 1.48  run-in breaches []
+   Mon 28 Sep       0  rest            
+   Tue 29 Sep    12.5  ga              
+   Wed 30 Sep      12  ga              LEGS(earliest slot) strides
+   Thu 01 Oct    21.5  medium          strides
+   Fri 02 Oct      13  ga              
+   Sat 03 Oct       8  recovery        
+   Sun 04 Oct      33  hard            
+   note: asks 7 run days; mandatory rest caps it at 6
+   note: medium-long run 21.5 km on 2026-10-01
+
+== week 5 2026-10-05 target 80 -> total 80  spread 1.8  V1 True V2 True V3 True V4 True  km-monotony(excl race) 1.90  run-in breaches [('2026-10-11', 20, 13)]
+   Mon 05 Oct       0  rest            easy-only window
+   Tue 06 Oct      10  recovery-first  easy-only window
+   Wed 07 Oct      12  ga              LEGS(earliest slot) strides easy-only window
+   Thu 08 Oct      18  medium          strides easy-only window
+   Fri 09 Oct      10  recovery        
+   Sat 10 Oct      10  recovery          run-in 13
+   Sun 11 Oct      20  hard              run-in 13
+   note: medium-long run 18.0 km on 2026-10-08
+
+== week 6 2026-10-12 target 60 -> total 60  spread 1.56  V1 True V2 True V3 True V4 True  km-monotony(excl race) 2.13  run-in breaches []
+   Mon 12 Oct       0  rest            easy-only window  run-in 13
+   Tue 13 Oct       8  recovery-first  easy-only window  run-in 13
+   Wed 14 Oct       8  ga              easy-only window  run-in 13
+   Thu 15 Oct    10.5  quality           run-in 13
+   Fri 16 Oct    12.5  medium          strides  run-in 13
+   Sat 17 Oct       8  recovery          run-in 13
+   Sun 18 Oct      13  hard              run-in 13
+   note: opened 2026-10-16 as a run day: the week does not fit its run days
+
+== week 7 2026-10-19 target 32 -> total 32  spread 2.2  V1 True V2 True V3 True V4 True  km-monotony(excl race) 1.27  run-in breaches []
+   Mon 19 Oct       0  rest              run-in 13
+   Tue 20 Oct      11  dress             run-in 11
+   Wed 21 Oct       9  medium            run-in 9
+   Thu 22 Oct       7  recovery        strides  run-in 7
+   Fri 23 Oct       5  shakeout          run-in 5
+   Sat 24 Oct  42.195  hard              run-in 0
+   Sun 25 Oct       0  rest            easy-only window
+   note: opened 2026-10-21 as a run day: the week does not fit its run days
+
+long-session spikes (>110% of trailing-30-day longest):
+   2026-09-27 27 km = 123% of 22
+   2026-10-04 33 km = 122% of 27
+   2026-10-24 42.195 km = 128% of 33
+
+MP ladder: [('2026-09-14', 0), ('2026-09-21', 10.0), ('2026-09-28', 21.1), ('2026-10-05', 0), ('2026-10-12', 0), ('2026-10-19', 0)] + taper session 6 + dress 3.2
+KEY sessions (legs gap anchors): ['2026-09-12', '2026-09-27', '2026-10-04', '2026-10-11', '2026-10-24']

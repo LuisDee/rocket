@@ -1839,3 +1839,54 @@ the most conservative of those is eighteen minutes quicker.
 The 100 km peak is still 1.75x his highest recorded week, and the volume base is
 still thin. A faster half raises the ceiling; it does not raise the floor under
 week 4. The reversal condition stands exactly as ratified.
+
+## 2026-09-15 -- Block structure: the weeks get roles, and Luis answers the design's questions
+
+### Why
+
+The app showed the week of 14 Sep as 7.6 / 7.6 / 7.6 / 7.6 / 7.6 / 22 / rest. Luis said it looked
+made up. `placement.distribute()` spreads a week's leftover kilometres evenly; an earlier research
+pass had written varied weeks and nothing used them. A 16-agent research and design pass
+(`docs/research/2026-09-14-block-structure/`) replaced the even spread with named day roles taken
+from published plans: rest after every long session, a short day before it, a quality day sized at
+14-25 % of the week, a medium or medium-long day, post-race easy-only windows (one day per 3 km raced,
+Daniels), and a variety rule that a uniform week fails.
+
+### Ratified by Luis on 15 Sep, answering the design's section 10
+
+- **Sun 18 Oct: 13 km easy**, not 18 km with marathon-pace work. MP moves to Thu 15 Oct (6 km) and
+  the race-week rehearsal (3.2 km).
+- **Paces switch:** marathon pace 5:08-5:15/km, threshold 4:34-4:38/km. Anchor is the official half
+  distance, with an allowance for the half being run in carbon shoes after a carb-load, which Luis
+  raised himself.
+- **Evenings can hold up to 25 km** (was 14). "Ive done halfs after work fine." This makes a real
+  midweek medium-long run possible, sized at 65 % of the week's long run, clamped 18-24 km, in weeks of
+  70 km or more (Pfitzinger's range). It also removes the peak week's forced double.
+- **Sun 11 Oct, the 10K:** the race morning is full, so the day becomes the race (with its warm-up)
+  plus a separate EASY evening run. Luis offered 10-15 km for the evening; the plan takes about 7 km,
+  so the day totals the designed 20 km. Taken shorter on purpose: 13 days out, a 25-28 km day works
+  against the taper for no stated gain. Recorded so he can overrule it.
+
+Still unanswered: which evening is the swim, and whether he lifts morning or evening.
+
+### Not ratified, and stated as such
+
+This week (from 14 Sep) runs five days, not the six `BLOCK_WEEKS` asks for: six runs make every
+non-long run 6.5-9 km, the uniform week he rejected. Luis ran Monday, so the rest day moves to
+Tuesday; he did not object. And the research overturned two things said to him the day before: no
+threshold session this week (the half's easy-only window runs to Sat 19 Sep), and Saturday's 22 km is
+all easy, with no marathon-pace finish.
+
+### The regenerated block (prototype `scripts/gen3.py`, totals checked)
+
+| Week | Mon | Tue | Wed | Thu | Fri | Sat | Sun |
+|---|---|---|---|---|---|---|---|
+| 14 Sep, 60 | 8.2 (run) | rest | 13 + strides | 9 + strides | 8 rec | 22 easy | rest |
+| 21 Sep, 80 | 18 MLR | 7.5 | 12 threshold | rest | 7.5 | 8 rec | 27, last 10 MP |
+| 28 Sep, 100 | rest | 12.5 | 12 + strides | 21.5 MLR | 13 | 8 rec | Lincoln 33 at MP |
+| 5 Oct, 80 | rest | 10 rec | 12 + strides | 18 MLR | 10 rec | 10 rec | 10K raced + evening easy = 20 |
+| 12 Oct, 60 | rest | 8 rec | 8 | 10.5 with 6 MP | 12.5 | 8 rec | 13 easy |
+| 19 Oct, 32 | rest | 11 rehearsal | 9 | 7 rec | 5 shakeout | MARATHON | rest |
+
+Nothing in `src/` or `config/` has changed yet; implementation follows
+`docs/research/2026-09-14-block-structure/IMPLEMENTATION_STAGES.md`.
