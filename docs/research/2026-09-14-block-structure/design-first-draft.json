@@ -1,0 +1,332 @@
+{
+ "markdown": "# Rocket block generator: role-based weeks, block management and adaptation\n\nWorktree: `/Users/luisdeburnay/dev/rocket/.worktrees/m1-core-loop`. INVESTIGATE mode: I read the code and ran the current planner. Nothing was written to the repo. My scratch validation script is `/private/tmp/claude-501/-Users-luisdeburnay-dev-routr/0f6602a3-b43a-46c6-b392-056cf6dbcf31/scratchpad/weeks.py`.\n\n## 0. What the current generator actually does (measured, not assumed)\n\nI ran `planWeek` and `describeWeek` over every week in `BLOCK_WEEKS`. The complaint understates the problem.\n\n| Week | Current output (Mon to Sun, km) | What is wrong |\n|---|---|---|\n| 14 Sep (60) | 7.6 / 7.6 threshold (7x4 min) / 7.6 / 7.6 / 7.6 / 22 long with 5.1 km at marathon pace / rest | Threshold 3 days after a maximal half, on the smallest kind of day. Strides on all four easy days. |\n| 21 Sep (80) | 10.6 x5, with threshold Wed / rest Sat / 27 long | Rest the day before the long run, and equal days again. |\n| 28 Sep (100) | rest / 13.4 x5 (including Sat, the day before Lincoln) / Lincoln 33 | Flat. A 13.4 km day before a 33 km marathon-pace session. |\n| 5 Oct (80) | rest / 12.8 x5 / 10K | Flat. |\n| 12 Oct (60) | rest / 10.5 / threshold 10.5 on Wed (3 days after the 10K) / 10.5 / 10.5 / rest / 18 long with 7.9 km at marathon pace | Threshold inside the post-race window. A hard long run 6 days before the marathon. |\n| 19 Oct (32) | rest / 11 / 9 / 7 / 5 / marathon | Distances fine. Strides every day, and no marathon-pace touch. |\n\nRoot causes in code:\n1. `placement.distribute()` divides the leftover km evenly across open days.\n2. `chooseRestDates()` prefers the day before a hard session. Pfitzinger puts a recovery run there.\n3. `describeWeek()` adds strides to every easy day. Its own config comment says \"never the day before quality or a long run\", and nothing implements that.\n4. Nothing models post-race recovery.\n\n**A second defect found while reading: doubles cannot survive a re-plan.** `store.ts replaceWindow` builds `byDate = new Map(editable.map(row => [row.date, row]))`, so both sessions of a double update the same row. One session is lost, and a stale row lingers. `diffWindows` and `toPlanned` are also keyed by date. The new generator uses doubles, so this must be fixed first (stage 5).\n\n## 0.1 Challenges to the prior design (prior-design-extract.md)\n\n- **Monotony.** The extract itself never cites Foster. The citation lives in its parent file, `docs/research/session-prescription-design.json`. That file's own verification marked \"keep monotony < 2.0\" as OVERSTATED. Measured on daily km, rocket's flat week scores 1.41 (CONFIRMED). The correct taper weeks I generate below score **2.15 and 2.13**, so a km-based \"< 2.0\" bound would pass the complaint and reject the right weeks. Monotony is a diagnostic here, never a placement rule.\n- **Threshold on Wed 16 Sep, day 4 after the half.** Two confirmed expert practices conflict. Higdon Advanced 2 has hills on day 2 and a tempo on day 4. Daniels prescribes 1 easy day per 3 km raced, so 7 days. I choose Daniels because week 2 is also a +72 % volume step. This is labelled a judgement between two confirmed sources.\n- **Week-5 \"medium-long as a double (12 + 8)\".** Not a medium-long run in any system (CONFIRMED: Pfitzinger doubles only on recovery days). This design never labels a double as a medium-long run.\n- **Zero threshold in the 100 km week.** More conservative than every coaching system. Kept, because rocket's ratified rule is that a race spends the quality budget. Labelled as a risk choice, not consensus.\n- **\"Largest Pfitzinger MP block is 12 mi\" (short-block sweep, CORRECTED).** Pfitzinger 18/70 week 13 has 14 mi (22.5 km) at marathon pace. Lincoln's 21.1 km is therefore inside Pfitzinger's maximum dose, but 20 days out rather than 5 weeks.\n- **18 km with 7.9 km at marathon pace on Sun 18 Oct.** Heavier than any template. It also breaks rocket's own run-in ceiling as an advisory breach. Replaced below (athlete question Q2).\n- **Run frequency was never ratified.** The athlete's recorded maximum is 4 runs a week. Pfitzinger gives 4-5 run days up to 88 km (CONFIRMED). Week 2's `minRunDays: 6` is what forces the flat 60 km week (athlete question Q1).\n\n## 1. Session library (config data: `SESSION_LIBRARY`)\n\nEvery entry is data: role id, purpose, dose, zone, recovery cost, placement constraints, progression and phases. Paces stay zone multipliers of `PACE_ANCHOR`, anchored on 278.9 s/km:\n\n| Zone | Pace | Heart rate |\n|---|---|---|\n| Threshold | 4:29 | work mean 172-177 |\n| Marathon pace | 5:03 | 158-168 |\n| Easy | 5:46-6:19 | ceiling 150 |\n| Recovery | 6:19-6:44 | ceiling 138 |\n\nCross-check: Pfitzinger's general-aerobic pace, 15-25 % slower than marathon pace, gives 5:48-6:18. That matches the existing easy band.\n\n| Role | Purpose | Dose | Zone | Recovery cost | Placement | Progression | Phases |\n|---|---|---|---|---|---|---|---|\n| `rest` | absorb | 0 km, swim allowed | none | none | day after the long run or race first, then day after quality | none | all |\n| `recovery` | volume without cost | 8 km default, 6-10 km | recovery | under 24 h | day before the long run or race; first run after a race | fixed length, does not scale with volume | all |\n| `recovery-double` | volume a single slot cannot hold | 10 km AM + 6 km PM, second run at least 25 min, at least 5 h apart | recovery | under 24 h | only by the overflow ladder; never on the day before a hard session; at most 3 a week | none | build, peak, taper |\n| `general-aerobic` | aerobic volume | whatever the remainder gives, up to the slot cap | easy | under 24 h | fills the remaining run days | sized off `medium`: each other general-aerobic day is 2/3 of it | all |\n| `medium` | the week's second-biggest stimulus | the largest general-aerobic day, up to the single-slot cap (14 km here) | easy | under 24 h | the general-aerobic day furthest from the hard days | none | build, peak, taper |\n| `medium-long` | second endurance run | 17.7-24.1 km continuous, 16-23 % of the week, 52-83 % of the long run | 74-84 % HRmax | 24 h | must fit one slot; never a double | +1-2 km a week | build and peak, when feasible |\n| `long` | endurance | from the macro layer; spike at most 110 % of the 30-day longest (advisory) | easy | 48 h; next day is rest | the week's anchor day | taper: 60 % then 40 % of the peak long session | all |\n| `long-mp` | marathon specificity | marathon-pace km = long run km x phase fraction; at most 20 % of the week and 110 min (Daniels) | easy, then marathon pace | 48 h | as `long`; never inside a post-race window | fraction by phase | build, peak |\n| `threshold` | raise the ceiling | 20-25 min early to 30-35 min later; cruise reps with 60-90 s jog; at most 10 % of the week and at most 6.5 km | threshold | 24-48 h | at least 2 days from other hard sessions; after the post-race window; never the day after a long run or race | by minutes, not km | build (and rebuild once the window clears) |\n| `taper-touch` | keep intensity while volume falls | 16 min of threshold (4x4) | threshold | 24-48 h | after the post-race window; 7-10 days out | none | taper, 1 week out |\n| `dress-rehearsal` | race-pace feel | 11 km with 3.2 km at marathon pace, goal race minus 4 days | easy + marathon pace | under 24 h | does not spend the quality budget | none | race week |\n| `shakeout` | race-eve activation | 20-30 min (5 km here) + 4-6 x 80-100 m | easy | none | goal race minus 1 day | none | race week |\n| `race-tuneup` | sharpen and calibrate | warm-up + race + cool-down | race | 1 easy day per 3 km raced | spends the week's quality | none | taper |\n| `race-rehearsal` | marathon pace inside the long day | the long session | marathon pace | 48 h + 4-5 easy days | is the week's long session | none | peak |\n| `strides` (add-on) | turnover, economy | 6 x 20 s on 2 days a week | strides | none | never the day before quality, a long run or a race; blocked by soreness 3 or more | none | all |\n| `hill-sprints` (add-on, off) | neuromuscular | 8-12 s, at least 90 s recovery, 4-5 reps rising by 2 a week to 10 | max | none | after an easy run, once a week | reps, then 8 to 10 s | base only; disabled this block (judgement: novel stimulus on top of heavy legs work) |\n| `vo2max` (off) | aerobic power | 5 x 1000 m at 5K pace, 2-4 min jog, at most 8 % of the week | VO2max | at least 48 h | 6-8 weeks out (Pfitzinger) | none | race-prep; disabled by the ratified 1-quality budget |\n\nRecovery cost comes from Stanley 2013 (a review): up to 24 h after easy running, 24-48 h after threshold, at least 48 h after high intensity. Only the recovery run's zone and length are encoded from Pfitzinger, as `under 76 % HRmax` and `4-7 mi`. The config's existing 138 ceiling is stricter and stays.\n\n## 2. Week structure as data (`WEEK_STRUCTURE`, `VARIETY`)\n\n**Anchors, in priority order.** These are the long run or race day L, the previous week's L, races and the goal race.\n\n- **L + 1 is rest.** Pfitzinger rests there in 48 of 48 weeks; Hansons runs easy instead.\n- **L \u2212 1 is recovery.** Pfitzinger does this in 22 of 33 weeks. A race eve becomes recovery or shakeout.\n- **Quality day Q** is the eligible day with the largest minimum gap to hard days. This is the existing `chooseQualityDate`, now with a post-race window added.\n- **Q + 1** is the second rest day, if the week has one. Pfitzinger 18/55 rests Thursday after a Wednesday threshold. It is never a rest day before a hard session.\n- **The first run after any race is recovery.**\n- **`medium`** is the general-aerobic day with the largest minimum distance to hard days (ties go to the earliest).\n- **Everything else is general-aerobic.**\n\n**Run days from volume.** Pfitzinger's tiers (CONFIRMED): up to 88 km, 5 days; 88-113 km, 6 days; above that, 7. `minRunDays` stays a floor; the existing semantics are kept. The mandatory rest day always wins.\n\n**Role shares, as bands rather than even splits:**\n- Long run: 32-38 % at 54-60 km, 26-31 % at 85-113 km (CONFIRMED; the share falls with volume).\n- Quality day: 17.5 % of the week, band 14-25 % (CORRECTED).\n- Recovery: fixed at 8 km.\n- Other general-aerobic days: 2/3 of `medium`. That ratio sits between Pfitzinger's general-aerobic to medium-long ratio of 0.83 and Higdon's 0.63.\n- All km round to 0.5, with the residual going to `medium`.\n\n**Hard/easy spacing.** Quality needs at least 2 days from any hard session (existing guardrail). Never the day after a long run or race (existing). Never inside a post-race window of `round(raceKm / 3)` easy days (Daniels).\n\n**Quality count by phase.** This is the existing `PRESCRIPTION.qualityPerWeek`. A race spends it (existing `racesCountAsQualitySessions`). New: the dress rehearsal does not.\n\n**Variability requirement.** The flat 7.6 x5 week becomes impossible by construction, not by a monotony score. Monotony cannot tell good weeks from bad (CONFIRMED).\n- **V1.** The longest non-long running day is at least **1.5x** the shortest, whenever there are 3 or more non-long run days. The lowest confirmed template that is not Daniels is 1.52-1.55; Pfitzinger runs 2.2-3.0. Rocket's flat week scores 1.00.\n- **V2.** The quality day is at least the median non-long day and at least 14 % of the week (the quality day is one of the largest days, CORRECTED). Rocket's 7.6 km threshold day fails this.\n- **V3.** L \u2212 1 is at most `recovery.maxKm`.\n- **V4.** L + 1 is rest.\n\nV1-V4 become rule id `week-structure`. They are blocking for generator output and advisory for athlete edits. Session-RPE monotony and strain (planned minutes x zone RPE) are shown as a diagnostic only. Daniels' long-run cap (25 % or 150 min) and marathon-pace cap (20 % or 110 min) are advisory per-system flags, because Pfitzinger's low-mileage plans routinely exceed them.\n\n## 3. Generation algorithm (replaces `distribute`)\n\nA pure pipeline in `src/domain/planner/placement.ts`, still called by `planWeek(week, options)`. The signature is unchanged, so `today.ts`, `plan.ts`, `daily-pass.ts` and `negotiate.ts` keep working.\n\n1. **`weekContext`.** Gathers slot openings (`openings`, kept); hard anchors (`hardSessions`, kept: a race carrying the long run is one session, and other races are additional to the target); the previous hard date (`previousWeekHardDate`, kept); day ceilings from `raceRunInCeilingKm`, kept inside `dayCapacityKm`; and post-race windows (new).\n2. **`chooseRunDays`.** Tier days, floored by `minRunDays`, capped at 7 \u2212 minimum rest days (kept).\n3. **`assignRoles`.** Applies the order in section 2. The rest-day order becomes after-hard, then after-quality, then earliest. The old \"day before hard\" preference is deleted. The legs day is fixed here: the quality day, otherwise the non-race long day, otherwise `medium`. Its run is placed in the morning slot when it fits, so `legsMinHoursAfterRun` can hold.\n4. **`sizeRoles`.** Fixed sizes first: long or race (macro layer), quality (share), recovery (8), dress rehearsal and shakeout (library, capped by the run-in). The remainder R goes to general-aerobic days: `medium = R / (1 + 2/3 x (n \u2212 1))`, capped by the day's single slot. If R still does not fit, an **overflow ladder** runs in order:\n   1. turn recovery days that are not L \u2212 1 into `recovery-double`, where the day ceiling allows;\n   2. raise recovery days to 10 km;\n   3. turn non-`medium` general-aerobic days closest to hard days into `recovery-double`;\n   4. open a run day, removing rest days in reverse preference (the existing loop);\n   5. report the shortfall as debt (existing).\n5. **`toSessions`.** Kept; it assigns slots per session. Doubles take the morning slot for the AM run and the evening slot for the PM run.\n6. **Validate.** `evaluateGuardrails` (existing) plus `week-structure` and `post-race-recovery`.\n7. **`describeWeek`.** Kept, now role-driven: threshold minutes by phase; marathon-pace fraction zeroed inside post-race windows; taper long run at 0.4 x the peak long session one week out; dress rehearsal; shakeout; strides on 2 eligible days. `placeStrength` is kept with the new legs-day rule and a ban on double days.\n8. **Readiness.** `today.prescribeWeek` and `daily-pass` keep applying `demoteQualityFrom` after generation (existing, unchanged).\n\n## 4. Progression across the weeks\n\n- **Weekly km** is the ratified 60 / 80 / 100 / 80 / 60 / 32 + marathon. The generator never changes a target; it only distributes it. Taper as a share of peak is 80 / 60 / 32 %, against Pfitzinger 18/70's 79 / 61 / 40 (CORRECTED). Race week is cut harder than Pfitzinger.\n- **Long run.** 22 \u2192 27 (8 km at marathon pace) \u2192 33 (Lincoln, 21.1 km at marathon pace) \u2192 16 (10K day) \u2192 **13** \u2192 marathon. Spike ratios against the 30-day longest: 104 % / 123 % / 122 %, with the marathon at 128 %. The last three are advisory and already ratified. The block reaches 25 km or more (Fokkema) and 32 km or more once (Runna).\n- **Marathon pace.** 0 (post-race window) \u2192 8 km (30 % of the long run) \u2192 21.1 km (21.1 % of the week, a named breach of Daniels' 20 %; 106 min, inside his 110) \u2192 0 \u2192 0 \u2192 3.2 km dress rehearsal \u2192 race. This is steeper than Pfitzinger's 8 / 10 / 12 / 14 mi ladder, and the design names that.\n- **Threshold.** 0 \u2192 24 min (5.35 km, inside Pfitzinger's 20-25 min early dose) \u2192 0 (Lincoln spends it) \u2192 0 (10K spends it) \u2192 16 min taper touch \u2192 0. The taper touch is a judgement between Bosquet (keep intensity) and RunnersConnect (last hard workout 12-13 days out). At 16 min it is a touch, not a hard workout.\n- **Medium-long run.** Infeasible this block. The weekday slot cap is 14 km, below Pfitzinger's 17.7 km minimum. Every Saturday that could hold one is the eve of a long run, Lincoln or the 10K. The generator emits `medium`, 12-14 km, and the note \"no medium-long run: the largest weekday slot (14 km) is under 17.7 km\" (athlete question Q3).\n- **Doubles.** Only through the overflow ladder: 2 in week 4 and 1 in week 5, all recovery doubles at 16 km, matching Pfitzinger 18/70 week 11. They are labelled availability-forced.\n\n## 5. Block and multi-block management\n\n**State model.** Season \u2192 Block (goal race A, start Monday, status) \u2192 Phase (`rebuild | build | peak | taper | race | recovery`) \u2192 Week (target km, long run, run days, quality budget, ratification) \u2192 Session (role, km, slot, zone structure, status).\n\n- Planned versus actual uses the existing `sessions.fulfilled_by_activity_id` and `activities`.\n- Compliance is derived: delivered/planned km per week, and key sessions hit.\n- Fitness and fatigue are derived: CTL/ATL/TSB from actual sessions only, a trend display that gates nothing (existing).\n- Anchors: measured HR in `ATHLETE` (config) and the race result used for `PACE_ANCHOR`.\n\n**Persisted versus derived:**\n\n| Persisted (Postgres) | Derived at read time |\n|---|---|\n| `blocks` (new, post-race): id, goal race id, start Monday, status, generator version | paces (`derivePaces`) |\n| `weeks` + `block_id`, `ratified_at`, `ratification_note` | CTL/ATL/TSB (`rollingLoad`) |\n| `sessions` + `role`, `prescription` jsonb (zones and minutes, never paces), unique (date, slot) | compliance, trailing 30-day longest, post-race windows |\n| `races` + `effort` (raced / marathon-pace / easy), `result_time_s`, `result_distance_km`, `stopped_s` | readiness verdict, structure validation, monotony diagnostic |\n| `plan_proposals` (new): kind, before/after payload, rationale, rule ids, status pending / accepted / declined / expired | the six-week projection beyond the rolling window |\n| Existing history tables stay append-only | none |\n\n**Creating a block from a goal race and date** (`proposeBlock`, `BLOCK_TEMPLATE`):\n- Weeks to race = N.\n- Taper: 3 weeks at 79 / 61 / 40 % of peak (Pfitzinger 18/70) when N is at least 8. Otherwise 2 weeks with a 41-60 % cut (Bosquet).\n- Entry week at no more than about 20 % above the trailing 4-week mean. Pfitzinger's plans assume the runner arrives at first-week volume.\n- Deload 15-25 % every 3rd-4th week (Higdon, McMillan).\n- Long-run ladder capped at 110 % per step (advisory).\n- The output is a **proposal**. Volume is athlete-ratified, and acceptance writes `weeks` rows with ratification text. For this athlete the proposal would have peaked well below 100. He ratified 100 with a reversal gate, and that record stands.\n\n**The next block.** After Sat 24 Oct the generator proposes a recovery block, from Pfitzinger's between-marathon 8-week plan (21 / 32 / 41 mi against a 66 mi peak): R1 about 32 % of peak (32 km), R2 about 48 % (48 km), R3 about 62 % (62 km). R1 starts with at least 3 no-run days (Higdon). Easy running from 48 h does not slow recovery (Martinez-Navarro). There is no quality until R2 ends. Then:\n- If a next A race is entered: a new block via `proposeBlock`.\n- If not: maintenance at the trailing 4-week mean with 3:1 loading (TrainingPeaks, CORRECTED).\n\n## 6. Adaptation: automatic versus surfaced\n\n**Automatic.** These happen inside the ratified week target and come back as a diff plus rationale:\n- A single missed session is skipped, not made up. Stryd resumes unchanged for 0-7 days; Runna lets one miss be skipped or moved within the week.\n- An extra run triggers the existing spanner absorption: the next quality session is downgraded and the overshoot is given back from easy days.\n- Soreness at 3 or more demotes quality and strides (existing, unchanged).\n- The post-race window blocks quality and marathon pace.\n- Availability loss re-places the week (existing).\n- Overflow into doubles.\n- A threshold session whose work-interval mean HR is above 180 slows threshold pace by 5 s/km (existing `thresholdVerdict`).\n\n**Surfaced as `plan_proposals`.** Nothing applies until the athlete accepts:\n- **Volume.** A week delivered under 85 % of target proposes holding the next week at the delivered level (the existing reversal condition). A gap of 8-14 missed days proposes repeating the phase; 15-28 days, back to base; 29 or more, restart (Stryd ladder). With a fixed race date, the rebuild targets that date (Runna option).\n- **Paces.** A marathon-pace HR trend or a race result proposes re-anchoring. That needs a trend across eligible sessions and user acceptance, and it keeps the structure (Runna Pace Insights).\n- **Two readiness channels tripped for 7 days** proposes \u221225 % volume with quality deleted. This rule comes from prior rocket research and was not re-verified here.\n- **Frequency, long-run distance and race roles** always go to the athlete.\n- **Over-performance** informs the conversation and never raises a target (existing `trend` trigger).\n\n## 7. Sanity check against real templates\n\n- **Week 4** (0 / 16 double / 12 / 13 / 16 double / 10 / 33) most resembles **Pfitzinger 18/70 week 11**: Monday rest, recovery double, recovery before the long run, long run about 31-33 %.\n- **Week 3** resembles **Pfitzinger 18/55 week 11**: quality midweek, rest after quality, recovery Saturday, long Sunday at 33-36 %.\n- **Week 2** resembles the **Pfitzinger 12-week up-to-55 week 2** shape: 5 runs, long about 37 %.\n- **Week 7** is **Pfitzinger 18/70 week 18**: 11 km with 3.2 km at marathon pace 4 days out, strides, short runs.\n\nEvery week hits its ratified km. Spread is 1.56-2.2, against 1.00 for the flat week. No run-in breaches remain.\n\nNamed deviations:\n- Long run above Daniels' 25 % in weeks 2-4.\n- Lincoln 21.1 % marathon pace (Daniels cap 20 %) and 178 min (Daniels long-run cap 150).\n- A 14 km day two days before the raced 10K, forced by the ratified 80.\n- No medium-long run.\n\n## 8. Questions for Luis (self-contained)\n\n- **Q1. Week of 14 Sep: 5 running days instead of 6?** Config asks for 6. At 60 km with a 22 km long run, 6 days forces five runs of 6-9 km, which is exactly the flat week you rejected. Pfitzinger's plans at this volume use 4-5 days, and your recorded maximum is 4 runs a week. Yes: 0 / 8 / 13 / 9 / 8 / 22 / 0. No: the generator keeps 6 days and flags week-structure rule V1.\n- **Q2. Sun 18 Oct: 13 km easy instead of 18 km with about 8 km at marathon pace?** Six days before the marathon, 18 km with a marathon-pace block is heavier than every published taper (Higdon: 40 % of your peak long session, which is 13 km). It also breaks rocket's own 13 km run-in ceiling. The 5 km moves into midweek easy days and the week stays 60. Marathon pace instead comes on Tue 20 Oct as 3.2 km inside an 11 km run.\n- **Q3. Could one weekday evening hold about 18 km (1 h 45 easy)?** If yes, weeks of 21 Sep to 5 Oct gain a real medium-long run and lose a double. If no, the plan stays as generated and says so.\n- **Q4. Which evening is the swim, and when do you lift?** Legs need at least 6 h after the run. On evening-run days that is impossible, so the generator puts the legs-day run in the morning slot (12 km or less).\n",
+ "sixWeekTable": "Paces come from the Battersea anchor, 278.9 s/km:\n\n| Zone | Pace | Heart rate |\n|---|---|---|\n| Threshold (T) | 4:29 | work mean 172-177 |\n| Marathon pace (MP) | 5:03 | ceiling 170 |\n| Easy | 5:46-6:19 | 150 or lower |\n| Recovery | 6:19-6:44 | 138 or lower |\n\nThe weeks below assume \"yes\" to questions Q1 and Q2. Every week total was checked by script. \"Long share\" is the long run as a share of the week. \"Spread\" is the longest non-long day divided by the shortest; the rejected flat week scores 1.00.\n\n### Week of 14 Sep: rebuild, 60 km (long share 36.7 %, spread 1.62)\n\n| Day | Km | Session | Gym |\n|---|---|---|---|\n| Mon 14 | 0 | Rest or swim. 48 h after the maximal half. | Push |\n| Tue 15 | 8 | Recovery, HR 138 or lower. First run after the race. | none |\n| Wed 16 | 13 | Easy, medium day, HR 150 or lower, then 6 x 20 s strides. | none |\n| Thu 17 | 9 | Easy, then 6 x 20 s strides. | none |\n| Fri 18 | 8 | Recovery, the day before the long run. | none |\n| Sat 19 | 22 | Long run, all easy. Day 7 of the Daniels post-race window, so no marathon pace. | Legs, evening, 6 h or more after the run |\n| Sun 20 | 0 | Rest or swim. | Pull |\n\nTotal 60. No quality this week; note: \"the post-race window closes Sun 20, the day after the long run.\"\n\n### Week of 21 Sep: build, 80 km (long share 33.8 %, spread 1.75)\n\n| Day | Km | Session | Gym |\n|---|---|---|---|\n| Mon 21 | 14 | Easy, medium day, then 6 x 20 s strides. | none |\n| Tue 22 | 9.5 | Easy. No strides: the day before quality. | none |\n| Wed 23 | 12 (AM) | Threshold. 3 km easy, 4 x 6 min @ 4:29 with 90 s jog, easy to 12 km. 5.35 km at T. First test of the new threshold pace. | Legs, evening |\n| Thu 24 | 0 | Rest or swim. | Push |\n| Fri 25 | 9.5 | Easy, then 6 x 20 s strides. | none |\n| Sat 26 | 8 | Recovery. | Pull |\n| Sun 27 | 27 | Long run: 19 km easy, then 8 km @ 5:03. Fuelling rehearsal. Spike 123 %, advisory. | none |\n\nTotal 80.\n\n### Week of 28 Sep: peak, 100 km (long share 33 %, spread 1.60)\n\n| Day | Km | Session | Gym |\n|---|---|---|---|\n| Mon 28 | 0 | Rest or swim. | Push |\n| Tue 29 | 16 | Recovery double: 10 km AM + 6 km PM, 5 h or more apart, HR 138 or lower. Availability-forced. | none |\n| Wed 30 | 12 (AM) | Easy, then 6 x 20 s strides. | Legs, evening |\n| Thu 1 Oct | 13 | Easy, then 6 x 20 s strides. Last strides before Lincoln. | Pull |\n| Fri 2 | 16 | Recovery double: 10 km AM + 6 km PM. | none |\n| Sat 3 | 10 | Recovery, race eve. | No gym |\n| Sun 4 | 33 | LINCOLN HALF: 8 km easy, 21.1 km @ 5:03 (not raced; slow to 5:20 if HR is above 172 for 2 km in a row), 3.9 km easy. | No gym |\n\nTotal 100.\n\n### Week of 5 Oct: taper, 80 km (long share 20 %, spread 2.00)\n\n| Day | Km | Session | Gym |\n|---|---|---|---|\n| Mon 5 | 0 | Rest or swim. Canova's 4-5 easy days after a big specific session begin. | Push |\n| Tue 6 | 16 | Recovery double: 10 km AM + 6 km PM. | none |\n| Wed 7 | 12 (AM) | Easy, then 6 x 20 s strides. | Legs, evening |\n| Thu 8 | 14 | Easy, then 6 x 20 s strides. | Pull |\n| Fri 9 | 14 | Easy. Forced by the ratified 80 km; named as a deviation. | none |\n| Sat 10 | 8 | Recovery, race eve. Run-in ceiling 13 km. | No gym |\n| Sun 11 | 16 | ASICS LDNX 10K, RACED: 3 km warm-up, 10 km flat out, 3 km cool-down. This is the week's quality. | No gym |\n\nTotal 80.\n\n### Week of 12 Oct: taper, protected, 60 km (long share 21.7 %, spread 1.56)\n\nEvery day here is capped at 13 km by the run-in.\n\n| Day | Km | Session | Gym |\n|---|---|---|---|\n| Mon 12 | 0 | Rest or swim. Daniels window: 3 easy days after the 10K. | Push |\n| Tue 13 | 8 | Recovery, then 6 x 20 s strides. | Pull |\n| Wed 14 | 12.5 | Easy, medium day. No strides: the day before quality. | No legs from week 6 |\n| Thu 15 | 10.5 | Taper touch. 3 km easy, 4 x 4 min @ 4:29 with 2 min jog, easy to 10.5 km. 3.6 km at T. | none |\n| Fri 16 | 8 | Easy, then 6 x 20 s strides. | none |\n| Sat 17 | 8 | Recovery. | none |\n| Sun 18 | 13 | Long run, all easy. 40 % of the 33 km peak session; replaces 18 km with 7.9 km at MP (Q2). | none |\n\nTotal 60.\n\n### Week of 19 Oct: race, 32 km + marathon (spread 2.20)\n\n| Day | Km | Session | Gym |\n|---|---|---|---|\n| Mon 19 | 0 | Rest or swim. | One light push session only |\n| Tue 20 | 11 | Dress rehearsal: 4 km easy, 3.2 km @ 5:03, easy to 11 km. 4 days out; does not spend the quality budget. | none |\n| Wed 21 | 9 | Easy. | none |\n| Thu 22 | 7 | Easy, then 6 x 20 s strides. | none |\n| Fri 23 | 5 | Shakeout: 25-30 min easy, then 4-6 x 80-100 m. | none |\n| Sat 24 | 42.2 | BATTERSEA PARK MARATHON, in carbons. Not counted in the 32. | none |\n| Sun 25 | 0 | Rest. Recovery block R1 begins. | none |\n\nTotal 32 + race.\n\n### Block checks\n\n- **Guardrails.** Every rocket guardrail passes. The only advisories are the spikes of 27 Sep (123 %), 4 Oct (122 %) and 24 Oct (128 %), all already ratified. There are no run-in breaches.\n- **Doubles.** 3 in the whole block, all recovery doubles of 16 km.\n- **Km-monotony per week.** 1.22, 1.51, 1.56, 2.15, 2.13, 1.06; the rejected flat week scores 1.41. This is why monotony is a diagnostic only.\n",
+ "ruleToSource": [
+  {
+   "rule": "Build weeks from day roles with separate size rules; never divide leftover km evenly",
+   "source": "All parsed plans (Pfitzinger 18/55, 18/70, 12/70; Hansons Advanced; Higdon); Runna fixes the long-run day and gives the long run its own progression",
+   "grade": "expert-practice / app-behaviour (CONFIRMED)",
+   "configField": "WEEK_STRUCTURE.roleOrder"
+  },
+  {
+   "rule": "Day after the long run or race is rest (Hansons exception: easy)",
+   "source": "Pfitzinger schedules: rest on 48 of 48 Mondays",
+   "grade": "expert-practice (CONFIRMED)",
+   "configField": "WEEK_STRUCTURE.dayAfterLongRole = 'rest'"
+  },
+  {
+   "rule": "Day before the long run is a short recovery run (6-10 km)",
+   "source": "Pfitzinger: recovery 22 of 33, tune-up race 8 of 33, general aerobic 3 of 33",
+   "grade": "expert-practice (CONFIRMED)",
+   "configField": "WEEK_STRUCTURE.dayBeforeLongRole = 'recovery'"
+  },
+  {
+   "rule": "Recovery run 6-10 km, fixed length that does not scale with weekly volume, under 76 % HRmax",
+   "source": "Pfitzinger 4-7 mi (Dave Bennett blog; 18/55-70 sheet, 5 mi at every volume)",
+   "grade": "expert-practice (CONFIRMED)",
+   "configField": "SESSION_LIBRARY.recovery.{defaultKm:8,maxKm:10}; HR_ZONES.recoveryCeiling 138 (existing, stricter)"
+  },
+  {
+   "rule": "Run days from volume: up to 88 km 5, 88-113 km 6, above 113 km 7; minRunDays stays a floor",
+   "source": "Pfitzinger 18/55 4-5 days, 55-70 plans 6, 70-85 plans 7",
+   "grade": "expert-practice (CONFIRMED)",
+   "configField": "WEEK_STRUCTURE.runDaysByVolume"
+  },
+  {
+   "rule": "Quality day 14-25 % of the week including warm-up and cool-down; default 17.5 %",
+   "source": "Pfitzinger LT/VO2 day 8-12 mi; shares 18/70 14-19 %, 12/70 14-18 %, 18/55 16-25 %",
+   "grade": "expert-practice (CORRECTED)",
+   "configField": "WEEK_STRUCTURE.qualityDayShare 0.175; VARIETY.qualityDayShareMin 0.14"
+  },
+  {
+   "rule": "Long-run share falls with volume: about 35 % at 55-60 km, 26-31 % at 85-113 km",
+   "source": "Pfitzinger up-to-55 34-36 %; 55-70 plans 26-31 %; Hansons peak 25 %",
+   "grade": "expert-practice (CONFIRMED)",
+   "configField": "WEEK_STRUCTURE.longRunShareBand (advisory)"
+  },
+  {
+   "rule": "Daniels long-run cap: 25 % of the week or 150 min; flagged per system, advisory",
+   "source": "sweatelite (25 %), coachray (150 min)",
+   "grade": "expert-practice (CORRECTED)",
+   "configField": "INTENSITY_CAPS.daniels.longRun {pct:25, min:150}"
+  },
+  {
+   "rule": "Non-long day spread: longest at least 1.5x shortest (3 or more non-long run days)",
+   "source": "Confirmed templates: Pfitzinger 2.2-3.0, up-to-55 1.55-2.0, Hansons 1.7, Higdon taper 1.52. The 1.5 bound itself is my judgement from those",
+   "grade": "expert-practice data (CONFIRMED); bound = judgement",
+   "configField": "VARIETY.minNonLongSpreadRatio 1.5"
+  },
+  {
+   "rule": "Do not use km monotony as the variety rule; session-RPE monotony is a diagnostic only; no 2.0 cutoff",
+   "source": "Foster 1998 (sRPE x duration, individual thresholds); recomputed: flat week 1.41 against Pfitzinger 1.49-1.94",
+   "grade": "observational (CONFIRMED)",
+   "configField": "VARIETY.monotonyDiagnosticOnly true"
+  },
+  {
+   "rule": "Medium-long run 17.7-24.1 km, a single continuous run, 16-23 % of the week, 52-83 % of the long run; only where one slot holds it",
+   "source": "Pfitzinger 18/55, 18/70 transcriptions; Dave Bennett blog (74-84 % HRmax, 10-20 % slower than marathon pace)",
+   "grade": "expert-practice (CORRECTED)",
+   "configField": "SESSION_LIBRARY.mediumLong.{minKm,maxKm,shareBand,longRatioBand}"
+  },
+  {
+   "rule": "A double is never a medium-long run, long run or quality session; it splits a recovery day about 60/40",
+   "source": "Pfitzinger 18/70: always 6 mi AM + 4 mi PM on recovery days",
+   "grade": "expert-practice (CORRECTED)",
+   "configField": "SESSION_LIBRARY.recoveryDouble.{amKm:10,pmKm:6}"
+  },
+  {
+   "rule": "Doubles: second run at least 25 min; runs at least 5 h apart; at most 3 a week; never on the day before a hard session",
+   "source": "Buena Vida 70-85 review (25 min); RunnersConnect doubles (5 h, 2-3 a week, not before hard)",
+   "grade": "expert-practice (CONFIRMED / CORRECTED)",
+   "configField": "SESSION_LIBRARY.recoveryDouble.{minPmMinutes:25,minHoursApart:5}; WEEK_STRUCTURE.maxDoublesPerWeek 3"
+  },
+  {
+   "rule": "Doubles only by the overflow ladder, labelled availability-forced; they are not a performance tool",
+   "source": "Pfitzinger first double at 66 mi; Yeo 2008 (no time-trial difference); Kjosen Talsnes 2024 (lower internal load)",
+   "grade": "expert-practice + trial (CONFIRMED)",
+   "configField": "WEEK_STRUCTURE.overflowLadder"
+  },
+  {
+   "rule": "General-aerobic run: 15-25 % slower than marathon pace, up to 16 km, 70-81 % HRmax",
+   "source": "Dave Bennett blog (pace); runningwithrock Pfitzinger explainer (HR)",
+   "grade": "expert-practice (CONFIRMED / CORRECTED)",
+   "configField": "SESSION_LIBRARY.generalAerobic; PACE_MULTIPLIERS.easy (existing)"
+  },
+  {
+   "rule": "Other general-aerobic days are 2/3 of the medium day",
+   "source": "Between Pfitzinger's 0.83 (general-aerobic to medium-long) and Higdon's 0.63 (short to midweek runs)",
+   "grade": "judgement bounded by CONFIRMED templates",
+   "configField": "WEEK_STRUCTURE.gaLadderRatio 0.667"
+  },
+  {
+   "rule": "Threshold at most 10 % of weekly km; rocket's absolute cap 6.5 km stays",
+   "source": "Daniels (coachray); rocket PRESCRIPTION",
+   "grade": "expert-practice (CONFIRMED)",
+   "configField": "PRESCRIPTION.thresholdMaxFractionOfWeek, thresholdMaxKm (existing)"
+  },
+  {
+   "rule": "Threshold progressed by minutes: 20-25 min early, longer later; cruise reps with short jog",
+   "source": "Pfitzinger 4th ed (runningwithrock); Haugen 2022 (1 min recoveries)",
+   "grade": "expert-practice (CORRECTED)",
+   "configField": "PRESCRIPTION.thresholdMinutesByPhase {build:24, taper:16}"
+  },
+  {
+   "rule": "Minimum gap between hard sessions: easy up to 24 h, threshold 24-48 h, high intensity 48 h or more",
+   "source": "Stanley, Peake & Buchheit 2013",
+   "grade": "review (CORRECTED grade)",
+   "configField": "GUARDRAILS.minDaysBetweenQualitySessions 2 (existing); SESSION_LIBRARY.*.recoveryHours"
+  },
+  {
+   "rule": "After a race, 1 easy day per 3 km raced before quality or marathon pace",
+   "source": "Daniels' Running Formula (Human Kinetics excerpt)",
+   "grade": "expert-practice (CONFIRMED)",
+   "configField": "POST_RACE.easyDaysPer3KmRaced 1 (new rule id post-race-recovery)"
+  },
+  {
+   "rule": "Short quality from day 2-4 and a full long run on day 7 after a half (the alternative not chosen)",
+   "source": "Higdon Intermediate 2 / Advanced 2, weeks 9-10",
+   "grade": "expert-practice (CONFIRMED); choosing Daniels over it = judgement",
+   "configField": "POST_RACE.policy 'daniels'"
+  },
+  {
+   "rule": "First run after a race is recovery; easy running from 48 h is fine",
+   "source": "Martinez-Navarro 2021 RCT; Costello 2020 (jump height and soreness back by 48 h)",
+   "grade": "trial / observational (CONFIRMED / CORRECTED)",
+   "configField": "POST_RACE.firstRunRole 'recovery'"
+  },
+  {
+   "rule": "No quality for 4-5 days after a big marathon-specific session",
+   "source": "Canova lecture (runningwritings); RunnersConnect special block (5-7 days)",
+   "grade": "expert-practice (CONFIRMED; extrapolated from elite)",
+   "configField": "POST_RACE.easyDaysAfterSpecificSession 4"
+  },
+  {
+   "rule": "Race spends the week's quality budget; marathon pace inside a long run does not count",
+   "source": "rocket ratified guardrail; consistent with Pfitzinger 18/70 week 16 (no other quality that week)",
+   "grade": "code owns truth; general rule UNVERIFIABLE in short-block sweep (judgement)",
+   "configField": "GUARDRAILS.racesCountAsQualitySessions (existing)"
+  },
+  {
+   "rule": "Marathon pace inside the long run: at most 20 % of the week and 110 min per session; Pfitzinger maximum 14 mi (22.5 km)",
+   "source": "Daniels (coachray; sweatelite says 90 min / 16 mi, a disagreement); Pfitzinger 18/70 week 13",
+   "grade": "expert-practice (CONFIRMED)",
+   "configField": "INTENSITY_CAPS.daniels.mp {pct:20,min:110}; PRESCRIPTION.longRunMpFraction (existing)"
+  },
+  {
+   "rule": "Taper long run at about 60 % of the peak long session 2 weeks out and 40 % 1 week out",
+   "source": "Higdon Intermediate 1 weeks 15-17 (20 / 12 / 8 mi)",
+   "grade": "expert-practice (CONFIRMED)",
+   "configField": "TAPER.longRunFractionOfPeak {2:0.6, 1:0.4}"
+  },
+  {
+   "rule": "No marathon pace in the taper long run (proposal: config fraction 0.44 becomes 0)",
+   "source": "RunnersConnect (last hard workout 12-13 days out); Pfitzinger race-week marathon pace limited to 2 mi",
+   "grade": "expert-practice (CONFIRMED)",
+   "configField": "PRESCRIPTION.longRunMpFraction.taper 0"
+  },
+  {
+   "rule": "Race-week dress rehearsal: 11 km with 3.2 km at marathon pace, 4 days out; does not spend the quality budget",
+   "source": "Pfitzinger 18/70 week 18 (7 mi with 2 mi at marathon pace, Wednesday before a Sunday race)",
+   "grade": "expert-practice (CONFIRMED)",
+   "configField": "PRESCRIPTION.raceWeekDressRehearsal {daysOut:4, mpKm:3.2, countsAsQuality:false}"
+  },
+  {
+   "rule": "Shakeout 20-30 min + 4-6 x 80-100 m, 18-24 h before the race",
+   "source": "RunnersConnect",
+   "grade": "expert-practice (CONFIRMED)",
+   "configField": "SESSION_LIBRARY.shakeout"
+  },
+  {
+   "rule": "Taper keeps intensity and frequency; cuts volume 41-60 % over about 2 weeks; 16-min threshold touch",
+   "source": "Bosquet 2007 meta-analysis; touch dose is judgement against RunnersConnect's 12-13 days",
+   "grade": "meta-analysis (CONFIRMED); dose = judgement",
+   "configField": "TAPER.touchThresholdMinutes 16; PRESCRIPTION.qualityPerWeek.taper 1 (existing)"
+  },
+  {
+   "rule": "Strides on a couple of easy days a week, never the day before quality, a long run or a race",
+   "source": "Daniels (Human Kinetics excerpt: strides on a couple of E days); rocket config comment",
+   "grade": "expert-practice (CORRECTED; count of 6 x 20 s not in source = existing rocket judgement)",
+   "configField": "PRESCRIPTION.strides.daysPerWeek 2 (new), count/seconds (existing)"
+  },
+  {
+   "rule": "Single session at most 110 % of the trailing-30-day longest run; advisory, never blocking",
+   "source": "Frandsen 2025 BJSM, 5,205 runners",
+   "grade": "observational (CONFIRMED)",
+   "configField": "GUARDRAILS.singleSessionSpikePct (existing)"
+  },
+  {
+   "rule": "No ACWR gate; week-to-week ratio is not a gate",
+   "source": "Impellizzeri 2020; Lolli 2019; Frandsen 2025 (negative dose-response); Damsted 2019 (day-21 window)",
+   "grade": "observational / expert-practice (CONFIRMED)",
+   "configField": "none (existing refusal)"
+  },
+  {
+   "rule": "Peak long run 25 km or more; 32 km or more at least once",
+   "source": "Fokkema 2020 (under 25 km adds 13.4 min); Runna long-run article",
+   "grade": "observational / app-behaviour (CONFIRMED)",
+   "configField": "BLOCK_TEMPLATE.longRunMinPeakKm 25, longRunTargetKm 32"
+  },
+  {
+   "rule": "Block template taper 79 / 61 / 40 % of peak over 3 weeks",
+   "source": "Pfitzinger 18/70 (12/70: 81/63/40; 18/55: 78/58/40); Smyth & Lawlor 2021 strict 3-week taper",
+   "grade": "expert-practice / observational (CORRECTED)",
+   "configField": "BLOCK_TEMPLATE.taperFractions"
+  },
+  {
+   "rule": "Deload every 3rd-4th week by 15-25 %",
+   "source": "Higdon (every 3rd, 55 to 38 mi); McMillan PDF; 80/20",
+   "grade": "expert-practice (CONFIRMED / CORRECTED)",
+   "configField": "BLOCK_TEMPLATE.deloadEvery 3, deloadCutPct [15,25]"
+  },
+  {
+   "rule": "Entry week about equal to the trailing base; largest step about 20 %",
+   "source": "Pfitzinger 12-week plans (Buena Vida): the runner arrives at first-week volume",
+   "grade": "expert-practice (CONFIRMED)",
+   "configField": "BLOCK_TEMPLATE.entryWeekMaxStepPct 20"
+  },
+  {
+   "rule": "Post-marathon recovery weeks at about 32 / 48 / 62 % of peak, starting with rest days",
+   "source": "Pfitzinger between-marathons 8-week plan (21/32/41 mi against 66); Higdon (3 days no running)",
+   "grade": "expert-practice (CONFIRMED)",
+   "configField": "BLOCK_TEMPLATE.postMarathonFractions [0.32,0.48,0.62]"
+  },
+  {
+   "rule": "Missed-days ladder: up to 7 resume; 8-14 repeat phase; 15-28 back to base; 29 or more restart. Beyond 7 days it becomes a proposal",
+   "source": "Stryd adaptive training FAQ",
+   "grade": "app-behaviour (CONFIRMED)",
+   "configField": "ADAPT.missedDaysLadder"
+  },
+  {
+   "rule": "Realignment offered (not applied) after more than 3 missed sessions or a missed week; with a fixed race, rebuild to the race date",
+   "source": "Runna Plan Realignment",
+   "grade": "app-behaviour (CORRECTED)",
+   "configField": "ADAPT.realignOfferAfterMissedSessions 3"
+  },
+  {
+   "rule": "Pace changes only on a multi-session trend plus athlete acceptance; structure kept; easy runs never repaced",
+   "source": "Runna Pace Insights",
+   "grade": "app-behaviour (CORRECTED)",
+   "configField": "ADAPT.paceChangeRequiresAcceptance true"
+  },
+  {
+   "rule": "Gym load counts as scheduled load; legs on the quality day, else the non-race long day, else the medium day; never on a double day; that day's run in the morning slot",
+   "source": "Athlete instruction (legs on hardest day); Garmin DSW failure when gym load is unseen (the5krunner). 'Hardest = quality first' is my reading",
+   "grade": "app-behaviour (CONFIRMED) + judgement",
+   "configField": "STRENGTH.legsDay 'quality>long>medium' (new); legsMinHoursAfterRun (existing)"
+  },
+  {
+   "rule": "Intensity choice (pyramidal vs polarised) is a risk decision, not a performance optimum",
+   "source": "Oliveira 2024 meta-analysis (time-trial SMD -0.01); Festa 2019",
+   "grade": "meta-analysis / trial (CONFIRMED)",
+   "configField": "none (UI wording)"
+  }
+ ],
+ "implementationStages": [
+  {
+   "stage": "0. Task file and decision record (no code). Write the header, then stop for review (AGENTS.md rule 3)",
+   "files": "tasks/role-based-week-generator.md (new); docs/decisions.md (entry: evenly-spread distribution replaced; Daniels chosen over Higdon for post-race; answers to athlete questions Q1-Q4 recorded as ratified or declined)",
+   "tests": "none; human review gate",
+   "verification": "Luis reviews the header; Q1-Q4 answered before stage 3 fixes week-2 literals"
+  },
+  {
+   "stage": "1. Config data: SESSION_LIBRARY, WEEK_STRUCTURE, VARIETY, POST_RACE, TAPER, new rule ids",
+   "files": "config/training.ts; config/training.test.ts",
+   "tests": "FAIL FIRST: 'every GUARDRAILS/READINESS/WEEK_STRUCTURE/VARIETY/POST_RACE field is claimed by exactly one rule id' (existing test extended to new consts, fails until week-structure and post-race-recovery ids exist); 'every library role has dose range, zone, recoveryHours, phases'; 'recoveryDouble pm run is at least minPmMinutes at recovery pace'; 'runDaysByVolume is monotonic in km'",
+   "verification": "npx vitest run config/training.test.ts; npm run typecheck; break one field claim on purpose, watch it fail, revert (AGENTS.md rule 4)"
+  },
+  {
+   "stage": "2. Week-structure validator (V1-V4) wired into guardrails",
+   "files": "src/domain/planner/structure.ts (new), structure.test.ts (new); src/domain/planner/guardrails.ts (evaluateGuardrails adds weekStructureRule); src/domain/planner/types.ts (RuleId via config)",
+   "tests": "FAIL FIRST: 'flags the evenly spread 7.6 x5 week (V1 spread 1.00, V2 quality day below median)'; 'passes Pfitzinger 18/70 week 11, 12-week up-to-55 week 2 and Higdon Intermediate 1 week 16 fixtures' (km from CONFIRMED templates); 'does not treat a km monotony of 2.15 as a breach'. Existing placement.test 'places every macro week without breaking a blocking guardrail' then fails on the current planner, which is the RED that drives stage 3",
+   "verification": "npx vitest run src/domain/planner/structure.test.ts src/domain/planner/guardrails.test.ts; deliberately set minNonLongSpreadRatio to 1.0, confirm the flat-week test fails, revert"
+  },
+  {
+   "stage": "3. Role assignment: rest order, post-race window, quality day, medium day, legs day",
+   "files": "src/domain/planner/placement.ts (assignRoles; chooseRestDates preference changed; chooseQualityDate gains POST_RACE window); placement.test.ts",
+   "tests": "FAIL FIRST, literal expectations: 'week of 14 Sep: Mon rest, Tue recovery, Wed medium, Thu ga, Fri recovery, Sat long, Sun rest, no quality, note names Sun 20'; 'week of 21 Sep: quality Wed 23, rest Thu 24, Sat 26 recovery'; 'week of 12 Oct: quality Thu 15, not Wed 14 (3 easy days after the 10K)'; 'never rests the day before a long run when a run day is available'",
+   "verification": "npx vitest run src/domain/planner/placement.test.ts; revert the POST_RACE check and confirm the week-6 test fails"
+  },
+  {
+   "stage": "4. Sizing and overflow ladder replace distribute()",
+   "files": "src/domain/planner/placement.ts (sizeRoles, overflowLadder; distribute deleted after grepping callers: only planWeek uses it); placement.test.ts (update 'does not reshape the weeks the run-in does not reach', whose 12.8 x5 literal encodes the defect; say so in the commit)",
+   "tests": "FAIL FIRST: literal km for all six weeks exactly as the six-week table (60/80/100/80/60/32); 'week of 28 Sep has exactly two recovery doubles of 10 + 6 and no other double'; 'no double lands on the day before a long run or race'; 'every day from 10 Oct respects raceRunInCeilingKm'; 'shortfall still reported when four days lose every slot' (existing, must stay green)",
+   "verification": "npx vitest run src/domain/planner; run scratchpad weeks.py equivalents inside the test; full npm test green"
+  },
+  {
+   "stage": "5. Doubles survive persistence and diffs",
+   "files": "src/db/schema.ts + drizzle migration (sessions.role text, unique index on date and time_slot); src/domain/store.ts replaceWindow keyed by date|slot; src/domain/store-memory.ts; src/domain/planner/negotiate.ts diffWindows keyed by date|slot; src/lib/plan.ts toPlanned; src/mcp/window.ts toPlannerSession",
+   "tests": "FAIL FIRST: store-memory and guards.integration 'replaceWindow twice over a window containing a double keeps both rows and 16 km'; 'diffWindows reports a slot-level change on a double day'",
+   "verification": "npm test; npm run test:integration against the Docker/Neon test DB; confirm the current date-keyed Map fails the new test before fixing"
+  },
+  {
+   "stage": "6. Role-driven description and strength placement",
+   "files": "src/domain/planner/prescribe.ts (describe by role: threshold minutes by phase, marathon pace zeroed in post-race window, taper long 0.4 x peak, dress rehearsal, shakeout, strides on 2 eligible days; placeStrength legs rule quality>long>medium, never a double day, run moved to the morning slot); prescribe.test.ts",
+   "tests": "FAIL FIRST: 'strides on exactly 2 days a week and never the day before quality/long/race'; 'week of 14 Sep long run has 0 marathon-pace km'; summaries '4 x 6 min threshold' (Wed 23) and 'Dress rehearsal, 3.2 km at MP' (Tue 20 Oct); legs dates Sat 19, Wed 23, Wed 30, Wed 7, none, none; update existing 'legs on hardest NON-race day' test to the new rule and record why",
+   "verification": "npx vitest run src/domain/planner/prescribe.test.ts src/domain/planner/today.test.ts"
+  },
+  {
+   "stage": "7. Guardrails for the new rules",
+   "files": "src/domain/planner/guardrails.ts (post-race-recovery rule; quality budget ignores dress rehearsal; Daniels long-run and marathon-pace advisories); guardrails.test.ts; src/domain/planner/scenarios.test.ts",
+   "tests": "FAIL FIRST: 'dress rehearsal in race week does not breach quality-session-budget'; 'threshold on day 4 after a raced half breaches post-race-recovery'; 'Lincoln day reports Daniels marathon pace 21.1 % advisory, non-blocking'; scenario 'spanner the day after a race keeps the post-race window'",
+   "verification": "npx vitest run src/domain/planner; python3 scripts/invariant-style check: delete the post-race rule, confirm a test fails, restore"
+  },
+  {
+   "stage": "8. Macro-layer changes only after athlete ratification (Q1, Q2)",
+   "files": "config/training.ts BLOCK_WEEKS (week 2 minRunDays 5; week 6 longRunKm 13; PRESCRIPTION.longRunMpFraction.taper 0); CHECK_IN_GATES 'days-hit' wording; config/training.test.ts; docs/decisions.md",
+   "tests": "FAIL FIRST: 'week of 18 Oct long run is at or below the run-in ceiling' (currently 18 > 13); 'no ratified weekly targetKm changed' (snapshot 28/60/80/100/80/60/32)",
+   "verification": "npm test; spike audit test still returns exactly the ratified advisories (27 Sep, 4 Oct, 24 Oct)"
+  },
+  {
+   "stage": "9. Adaptation and proposals (post-race scope unless Luis pulls it forward)",
+   "files": "src/domain/planner/adapt.ts (new: compliance, missed-days ladder, trend-to-proposal); src/db/schema.ts plan_proposals + migration; src/domain/store.ts; src/mcp/tools.ts (rocket_get_status lists pending proposals; typed rocket_decide_proposal accept/decline, REDLINES rule 8); src/jobs/daily-pass.ts (emit proposals, never apply)",
+   "tests": "FAIL FIRST: 'week delivered at 80 % proposes holding next week at delivered km and changes no session'; '9 consecutive missed days yields a repeat-phase proposal'; 'accepting a proposal writes weeks rows with ratification text'; 'over-performance never raises a target' (existing trend test stays)",
+   "verification": "npm test; tools.test.ts contract envelope unchanged for existing tools"
+  },
+  {
+   "stage": "10. Multi-block: blocks table and next-block proposal (after 24 Oct)",
+   "files": "src/db/schema.ts blocks + weeks.block_id + races effort/result columns; src/domain/planner/block.ts (proposeBlock, postMarathonRecovery); src/lib/block.ts currentWeek reads the active block",
+   "tests": "FAIL FIRST: 'proposeBlock for a 12-week marathon yields a 3-week 79/61/40 taper and deloads every 3rd week'; 'post-marathon proposal starts with 3 no-run days and weeks at 32/48/62 % of peak'; 'no block becomes active without ratification'",
+   "verification": "npm test && npm run test:integration; migrate a copy of the Neon schema, never run against production without approval"
+  }
+ ]
+}

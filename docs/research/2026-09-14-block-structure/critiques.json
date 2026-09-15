@@ -1,0 +1,156 @@
+[
+ {
+  "verdict": "I would hand this plan to the athlete once five fixes are made; I would not hand it over as it stands. The structure is a big improvement on the flat 7.6 km-per-day week. Days now vary, the day after each long run is rest, the day before is a short recovery run, quality is never inside a post-race recovery window, race week is sensible, and taking the marathon-pace block out of 18 Oct is right. I re-added every week and each one hits its agreed total (60 / 80 / 100 / 80 / 60 / 32). The \"spread\" and \"long share\" figures are also correct. What is wrong is the coaching detail. (1) The target paces for marathon pace and threshold are too fast and aren't reconciled with this runner's evidence. (2) Marathon pace jumps from 8 km to 21.1 km in one week, then nothing for 16 days, and nothing longer than 16 km is run in the 20 days before the marathon. (3) The rule that fills leftover km creates doubles (two runs in a day) the design's own limits don't require, for a runner whose most is 4 runs a week and who has never run a double. (4) The heavy legs gym session lands 3-4 days either side of Lincoln and the 10K, which also breaks the design's own rule for choosing the legs day. Nothing blocks the plan outright; all of this can be fixed inside the agreed weekly totals. One source gap: I could not open a full Pfitzinger taper schedule (Buena Vida's reviews and Fellrnr don't show weeks 16-18, and the LetsRun forum returned 403), so taper points rely on Higdon's published plan, which I did open.",
+  "issues": [
+   {
+    "severity": "major",
+    "issue": "The marathon-pace target of 5:03/km isn't backed by this runner's own results, yet it sets the pace for the block's biggest session: 21.1 km at marathon pace inside the 33 km Lincoln day, 20 days before the race. The Battersea half (1:38:58, 4:39/km) was run in carbon shoes after a carb-load. His only marathon, in May 2026, was 3:52:59 (5:31/km). The earlier research found he slows sharply with distance (fatigue exponent 1.131).",
+    "evidence": "I computed paces with the published Daniels-Gilbert oxygen-cost and time-to-exhaustion equations (my script: /private/tmp/claude-501/-Users-luisdeburnay-dev-routr/0f6602a3-b43a-46c6-b392-056cf6dbcf31/scratchpad/vdot.py). The half gives a Daniels fitness score (VDOT) of 45.7, which predicts a marathon at 4:52/km. The May marathon gives VDOT 39.3 (5:31/km). Riegel's formula with his own 1.131 exponent predicts 3:36:48, or 5:08/km. Carbon racing shoes lower the energy cost of running by about 4% (Hoogkamer 2018, https://pmc.ncbi.nlm.nih.gov/articles/PMC5856879/), so a half raced in carbons flatters marathon pace in the daily trainers he trains in. The design also gives three different marathon-pace heart-rate limits: a 158-168 band, a 'ceiling 170' in the week tables, and a slow-down trigger at 172 for Lincoln.",
+    "fix": "Set marathon pace as a 5:08-5:15/km band with heart rate in charge. At Lincoln, run the first 13 km at 5:12-5:15 and only drop towards 5:05 over the last 8 km if heart rate stays under 165. Use one heart-rate ceiling everywhere (168). Re-anchor after Lincoln using its average heart rate and heart-rate drift."
+   },
+   {
+    "severity": "major",
+    "issue": "Threshold pace of 4:29/km is faster than Daniels' own threshold prediction from a half that was raced in carbon shoes. It also quietly replaces the 4:52 threshold the earlier research derived, without reconciling the two. That earlier research named a too-fast threshold as the single most likely way this build ends in injury.",
+    "evidence": "From the same Daniels-Gilbert equations, a 45.7 VDOT runner's one-hour race pace (Daniels' definition of threshold) is 4:32/km, 3 s/km slower than 4:29, before any correction for the shoes. The earlier research (prior-design-extract.md, around lines 40-42) set 4:52 and a check on mean heart rate during the work intervals. The new design keeps that heart-rate check (172-177) but moves the pace by 23 s/km and doesn't mention the earlier 4:52 anywhere.",
+    "fix": "Start threshold at 4:35-4:38/km for the Wed 23 Sep session. Keep the rule: if mean heart rate during the reps is above 180, slow by 5 s/km. Note in the design that it supersedes the earlier 4:52, and why."
+   },
+   {
+    "severity": "major",
+    "issue": "Marathon-pace work is badly shaped across the block. It goes 0 \u2192 8 km \u2192 21.1 km in consecutive weeks, then there is none at all from 5 Oct to 19 Oct, 16 days, until a 3.2 km touch 4 days before the race. The design admits it is steeper than Pfitzinger's 8/10/12/14-mile ladder but does nothing about the gap afterwards. Higdon keeps a marathon-pace run in every taper week. Separately, the only threshold session in six weeks is 23 Sep, because the design's rule that 'a race uses up the week's one quality session' is applied to Lincoln, which is run at marathon pace and not raced.",
+    "evidence": "Higdon Intermediate 1 marathon plan (https://www.halhigdon.com/training-programs/marathon-training/intermediate-1-marathon/): Saturday runs in weeks 15, 16 and 17 are 5, 4 and 3 miles at marathon pace, followed by long runs of 20, 12 and 8 miles.",
+    "fix": "Change the Thu 15 Oct threshold touch into 6-8 km at marathon pace inside a 12 km run (more specific to the marathon, and lighter than threshold). Or add 5 km at marathon pace inside the Wed 7 Oct run. In week 1, the Wed 16 Sep 13 km run could finish with 3 km at steady pace once the post-race window allows, so the jump into 8 km at marathon pace isn't cold."
+   },
+   {
+    "severity": "major",
+    "issue": "There is a 20-day gap with no run longer than 16 km between Lincoln (4 Oct) and the marathon (24 Oct). The week of 5 Oct has no long run: the 10K day is 16 km in total. Higdon's taper keeps a long run of about 60% of peak two weeks out; for this athlete that is about 19-20 km. Meanwhile Fri 9 Oct carries 14 km two days before the raced 10K, which the design lists as a forced deviation.",
+    "evidence": "Higdon Intermediate 1 (URL above): long runs of 20 then 12 then 8 miles over the last three weeks, so 12 miles two weeks out. Design week of 5 Oct: 0/16/12/14/14/8/16, where the Sunday 16 km is warm-up plus 10K race plus cool-down.",
+    "fix": "Make Sun 11 Oct about 20 km: 4 km warm-up, the 10K, then a 6 km easy cool-down. Cut Fri 9 Oct to 10 km. The week still totals 80, the forced 14 km run two days before a race disappears, and the athlete gets one longer run in the final three weeks."
+   },
+   {
+    "severity": "major",
+    "issue": "The rule that fills leftover km adds doubles that the design's own day limits don't need. Its first step turns days into doubles; raising the day before the long run or race to 10 km only comes second. The design's sources say Pfitzinger adds his first double at 66 mi/week (about 106 km), yet this plan puts doubles into 100 km and 80 km weeks. The runner's recorded maximum is 4 runs a week and he has never doubled. The 100 km week becomes 7 runs, with a first-ever double on the Friday two days before Lincoln.",
+    "evidence": "Week of 5 Oct without doubles, using the design's own limits (weekday mornings 12 km, evenings 14 km, recovery run at most 10 km): 0 / 14 / 12 / 14 / 14 / 10 / 16 = 80. Week of 28 Sep: 0 / 17 (a single double, 10 km AM + 7 km PM) / 12 / 14 / 14 / 10 / 33 = 100. That is one double instead of two, and none on Friday. The design's rule sources list 'Pfitzinger first double at 66 mi'.",
+    "fix": "Reorder the fill steps: first raise recovery days to 10 km and fill single runs up to each slot's limit; only then add doubles, at most one a week, never within 2 days of a race or the marathon-pace long run. Add a check that the first double in a block isn't in the peak week."
+   },
+   {
+    "severity": "major",
+    "issue": "The heavy legs gym session is badly placed around the two key weekends, and it breaks the design's own rule for picking the legs day. Wed 30 Sep is 4 days before the 33 km Lincoln day with 21 km at marathon pace. Wed 7 Oct is 3 days after Lincoln, during the easy days the design itself prescribes after a big session (the Canova rule), and 4 days before a raced 10K. The design's rule says legs go on the quality day, otherwise the long-run day, otherwise the medium day. In the week of 28 Sep the medium day is Thu (13 km), but legs were moved to Wed without saying so, presumably because 13 km is over the 12 km morning limit.",
+    "evidence": "Design week tables: Wed 30 Sep '12 (AM) Easy \u2026 Legs, evening' and Wed 7 Oct '12 (AM) Easy \u2026 Legs, evening'. Design rule: legs go to 'the quality day, otherwise the non-race long day, otherwise medium', with that day's run in the morning slot.",
+    "fix": "In weeks that have a race or a marathon-pace long run, make legs a maintenance session (about half the sets, nothing to failure, no heavy eccentric work) placed at least 72 h from both the race and the long session. Or state it as an explicit exception the athlete agrees to. Report it whenever the legs-day rule is overridden, rather than moving the session silently."
+   },
+   {
+    "severity": "minor",
+    "issue": "The race-week monotony figure (1.06) counts marathon day as 0 km. That makes it inconsistent with the other weeks, which use every day's km.",
+    "evidence": "Recomputed daily km 0,11,9,7,5,0,0 gives 1.06; including the 42.2 km race gives 0.79. The other five weeks recompute to 1.22 / 1.51 / 1.56 / 2.15 / 2.13, which match the design.",
+    "fix": "Label it 'excluding the race', or leave race week out of the monotony check (it is only a diagnostic anyway)."
+   },
+   {
+    "severity": "minor",
+    "issue": "The weekly swim is effectively forced onto Monday, but the question about which evening is the swim (design question Q4) is still unanswered. In the weeks of 28 Sep and 5 Oct, Tuesday to Friday evenings are all taken by evening runs, second runs of doubles, or legs gym.",
+    "evidence": "Week of 28 Sep: Tue evening second run, Wed legs in the evening, Thu 13 km (over the 12 km morning limit, so an evening run) plus pull gym, Fri evening second run.",
+    "fix": "Make the swim evening an input to the generator, and treat that evening as unavailable for running before placing runs."
+   },
+   {
+    "severity": "minor",
+    "issue": "Week of 14 Sep: using Daniels' rule of one easy day per 3 km raced makes sense, but the week is then 5 runs, including a 22 km long run, just after four weeks of 19-24 km. That is already more than his recorded maximum of 4 runs a week. The design asks the athlete about run frequency (Q1) but offers 5 days as the conservative choice, without saying it is also a jump.",
+    "evidence": "Design question Q1 notes the recorded maximum is 4 runs a week and proposes 0/8/13/9/8/22/0.",
+    "fix": "Say in Q1 that 5 runs is itself a step up. Offer a 4-run option (0/10/14/0/14/22/0 = 60) so the athlete can weigh them."
+   }
+  ]
+ },
+ {
+  "verdict": "Not buildable as written. The coaching logic is sound, but six things block it as an engineering plan. (1) Stored session rows always override the generator, and nothing is planned to regenerate the window that is already stored, so the app would keep showing the flat week. (2) Several stage tests expect week 2 and week 6 numbers that only become true after the config change in stage 8. (3) The persistence fix for doubles lands after the stage that generates doubles. (4) Session roles are never carried through the single plan reader, so the app would describe stored sessions without their roles. (5) The planner reads config and the seeder rebuilds weeks from config, so the multi-block and proposal stages have nothing that could consume a weeks row written on acceptance. (6) The worked week-4 numbers do not follow from the stated sizing formula. Fix the stage order and the missing state first. Most of the coaching rules can stay.",
+  "issues": [
+   {
+    "severity": "blocker",
+    "issue": "Stored rows always win over the generator (lib/plan.ts, today.prescribeWeek), and the daily pass only fills days that have no row yet. The new generator would therefore never reach the ~10 days already stored in Neon. The flat 7.6 km week the athlete complained about keeps showing in the app, the MCP tools and the watch push until those dates roll off. No stage regenerates the existing window.",
+    "evidence": "src/jobs/daily-pass.ts:463-483 only calls planWindow when `missing.length > 0`; src/domain/planner/today.ts:102-103 `placed = fromStore ? stored : open.sessions`; src/lib/plan.ts:111-121.",
+    "fix": "Add an explicit stage for a one-shot, planner-authored regeneration of planned rows (status='planned' only). Trigger it from a generator version bump: store the generator version per session or per week, and let the daily pass regenerate planned rows whose version is stale. Include an integration test: the window is seeded by the old generator, the pass runs, and the planned rows change while done and skipped rows do not."
+   },
+   {
+    "severity": "blocker",
+    "issue": "The multi-block and proposal stages (9-10) write `weeks` rows on acceptance, but nothing reads them. planWeek, planWindow, currentWeek, the guardrails' `planned`, plannedValues and raceRunInCeilingKm all read BLOCK_WEEKS or BLOCK from config. seed.mts treats `weeks` as a projection of config and deletes rows config does not name. `weeks.week_number` is the primary key, and sessions.week_number references it, so a second block's week 1 cannot coexist with this block's. BLOCK.goalRaceDate is a single constant that the run-in ceiling and placeStrength both read. Adding blocks.id plus weeks.block_id does not solve any of this.",
+    "evidence": "src/db/schema.ts:45-47 (`weekNumber` primaryKey), :69 FK; src/db/seed.mts header + line 114 `delete from weeks where week_number <> all(...)`; src/lib/block.ts:35-43; config/training.ts:299-316 raceRunInCeilingKm reads BLOCK.goalRaceDate; src/domain/store.ts plannedValues looks up BLOCK_WEEKS by monday.",
+    "fix": "Before stage 9, decide where the macro layer lives. Option A: it stays in config, and accepting a proposal becomes a reviewed config commit, so the proposal stores a diff for a human to apply. Option B: it moves to the DB. That means a surrogate or composite weeks key, repointing the sessions FK, the seeder no longer deleting non-config weeks, planWeek taking the week facts as an argument instead of looking up BLOCK_WEEKS, and the goal race date passed into raceRunInCeilingKm and placeStrength. Record the choice as a decision entry, name every call site that changes, and add a REDLINES rule-1 note for ratified targets stored outside config."
+   },
+   {
+    "severity": "blocker",
+    "issue": "The stage order contradicts the design's own dependencies. Stage 3 expects week 2 as rest Mon, 5 run days, recovery Tue and Fri. Stage 4 expects literal km for all six weeks, including the 13 km long run on 18 Oct. Both depend on minRunDays 5 and longRunKm 13, which only change in stage 8. Those tests can never go green at stages 3-4, or they get written against 6 days and 18 km and rewritten at stage 8. Separately, stage 4 is the first to generate recovery doubles, but the replaceWindow fix that stops doubles being lost is stage 5, although the design itself says it 'must be fixed first'. Each stage lands on main and the Vercel cron runs daily, so stage 4 alone would write lossy rows.",
+    "evidence": "config/training.ts BLOCK_WEEKS week 2 `minRunDays: 6`, week 6 `longRunKm: 18`; design stage 0 says 'Q1-Q4 answered before stage 3' while the config change is stage 8; store.ts:158 `byDate = new Map(editable.map(row => [row.date, row]))`.",
+    "fix": "Reorder to 0, 1, then 5 (persistence and date|slot keying), then 8 (the ratified config change, gated on Q1 and Q2), then 2, 3, 4, 6, 7. If Q1 or Q2 is declined, the stage 3-4 literals must come from the declined config. Write both variants into the task header now."
+   },
+   {
+    "severity": "blocker",
+    "issue": "Roles never survive the single plan reader. describeWeek is meant to become role-driven (recovery, medium, dress rehearsal, shakeout, taper touch), but PlannedSession has no `role`. SessionRow has no `role`. toPlanned and mcp/window.ts toPlannerSession map `type` through KINDS, where unknown values fall back to 'easy'. The store's row mapper and plannedValues drop anything extra. On the stored path, which is the normal path, a dress rehearsal comes back as a plain easy day. Stage 5 lists some of these files but not src/domain/types.ts SessionRow, not planner/types.ts PlannedSession, and not the store row mapper. Stage 6 does not list lib/plan.ts at all. The design also says 'the signature is unchanged', which is false once PlannedSession gains a field. Existing Neon rows have no role, and no backfill or fallback is defined.",
+    "evidence": "src/domain/planner/types.ts:27-35; src/domain/types.ts:15-26; src/lib/plan.ts:66-84; src/mcp/window.ts:34-51; src/domain/store.ts:395-403 and plannedValues:430-440.",
+    "fix": "Add `role` to PlannedSession, which also touches guardrails, negotiate, demoteQualityFrom and diffWindows, and to SessionRow, the store mappers, store-memory, both KINDS maps and their equality test. Define the reader's behaviour for a row with a null role: fall back to kind and emit a note. Add a test that round-trips a dress rehearsal and a recovery double through store-memory, then planForDate, and asserts the summary text."
+   },
+   {
+    "severity": "major",
+    "issue": "The unique index on (date, time_slot) would break existing writes. replaceWindow matches only `planned` rows, so if a `done` or `skipped` row already holds the same date and slot, the planner takes the INSERT branch and violates the index. That throws mid-way through a non-transactional loop of awaits and leaves a partly replaced window. It happens whenever the daily pass replans from today and this morning's run is already done. Creating the index on Neon also fails if duplicates exist, and the design itself says stale duplicate rows linger today.",
+    "evidence": "src/domain/store.ts:151-182 (separate awaits, no transaction, editable filters status==='planned'); daily-pass.ts:489-494 already documents a duplicate row left by the INSERT branch.",
+    "fix": "The migration must dedupe first: a planned row that duplicates a non-planned row on the same date and slot is deleted; that is allowed, because only planned rows are the planner's to change. Wrap replaceWindow in a transaction. Define the planner rule for a date and slot already taken by a done row: skip the slot or re-slot. Test: a done AM row plus a regenerated AM session gives no throw and one row."
+   },
+   {
+    "severity": "major",
+    "issue": "Doubles and the legs day rely on 'morning' and 'evening', and AVAILABILITY does not have those concepts. placement.ts is deliberately slot-shape agnostic ('slot ids never appear below'). 'AM run in the morning slot, PM in the evening slot', 'second run at least 5 h apart' and 'legs-day run in the morning slot so legsMinHoursAfterRun can hold' all need slot time-of-day or ordering data that AVAILABILITY lacks. The existing toSessions fills the roomiest slot first, so a 16 km recovery double becomes 14 + 2, not 10 + 6. On week 3's quality day (17.5 % of 80 = 14 km) the run cannot fit the 12 km morning slot, so the legs rule and the sizing rule conflict with no stated winner.",
+    "evidence": "src/domain/planner/placement.ts:4-8 and toSessions:466-501; config/training.ts AVAILABILITY.runSlots has only id/weekdays/maxKm/maxUsesPerWeek.",
+    "fix": "Add slot data fields to AVAILABILITY in stage 1 (e.g. `startLocal` or `order`, plus `minHoursBetweenSessions`). Give SESSION_LIBRARY recovery-double an explicit per-session split (amKm, pmKm) and have toSessions honour a role's split. State precedence for the legs day when the run cannot fit the earliest slot: move legs to the next candidate day, or shrink the run to the slot. Test that rule."
+   },
+   {
+    "severity": "major",
+    "issue": "The sizing algorithm cannot reproduce its own worked weeks. Week 4 as stated is 33 long + 10 recovery (Sat), leaving R = 57 over 4 general-aerobic days. That gives medium = 57/3 = 19, capped to 14 by the slot, and the others 2/3 x 14 = 9.3. That is 42, 15 km short. The ladder then turns the two days nearest the hard sessions (Tue and Fri, tied at 2 days away, with no tie-break given) into 16 km doubles, which leaves 11 km for one day. The published week has 12 and 13 on Wed and Thu, and the 13 km Thursday is larger than the designated medium Wednesday, even though medium is defined as the largest general-aerobic day. The design never says whether the 2/3 ratio is recomputed after a ladder step, how 'residual goes to medium' works once medium is at its cap, or which recovery days step 1 means in a week whose only recovery day is L \u2212 1. Stage 4 asserts 'literal km exactly as the six-week table', but the design contains no full table for weeks 3, 5, 6 or 7.",
+    "evidence": "Design sections 3.4 and 7 (week 4 = 0/16/12/13/16/10/33); section 2 'medium ... ties go to the earliest': Wed 30 and Thu 1 are both 3 days from a hard session.",
+    "fix": "Write sizeRoles as numbered pseudo-code with explicit tie-breaks, and re-apply the ratio or push the residual after each ladder step. Run it (weeks.py) and paste the resulting full Mon-Sun km table for all 6 weeks into the task header before stage 4. Stage 4 tests must assert that table, and the design prose must be corrected to match it, not the other way round."
+   },
+   {
+    "severity": "major",
+    "issue": "The post-race window has no data to run on before stage 10, and its definition is ambiguous. Lincoln is run at marathon pace, the 10K is raced, the half was raced. The library gives two different windows ('1 easy day per 3 km raced' for race-tuneup, '48 h + 4-5 easy days' for race-rehearsal), but `races.effort` is only added in stage 10. round(21.1 / 3) = 7 from Sun 4 Oct runs to Sun 11 Oct, which puts the raced 10K inside Lincoln's window. The new blocking post-race-recovery rule would then refuse a ratified race unless races are exempt. The design does not say whether the window is inclusive: the 22 km long run on Sat 19 Sep is day 7 after the half. The marathon's 14-day window crosses into a block that does not exist yet.",
+    "evidence": "config RACES has role only; src/db/schema.ts races has no effort column; design stage 3 already needs the window.",
+    "fix": "Put `effort` (raced / marathon-pace) on RACES in config at stage 1, not in the DB at stage 10. Define POST_RACE per effort as data. Specify whether the window is inclusive and that races and ratified long runs are exempt from post-race-recovery. Add tests for 'the 10K inside Lincoln's window is not a breach' and 'the long run on day 7 is allowed, its marathon-pace km is zeroed'."
+   },
+   {
+    "severity": "major",
+    "issue": "The design ignores the per-day layer the athlete already ratified. BLOCK_WEEKS week 2 carries `days: [6, 8, 10, 8, 6, 22, 0]` (varied, with notes), and qualitySessionCount reads `week.days`. The design proposes 0/8/13/9/8/22/0 without mentioning that this ratified day list exists or saying whether the generator must honour it, override it, or delete it.",
+    "evidence": "config/training.ts BLOCK_WEEKS week 2 `days:` array; qualitySessionCount(week.days).",
+    "fix": "State the precedence: the ratified `days` wins over the generator, or it is retired with a decision entry. Add a Q5 for Luis if replacing it. Test that a week with non-null `days` is placed as written."
+   },
+   {
+    "severity": "major",
+    "issue": "V1-V4 are called 'blocking for generator output', but the design never says what refuses. planWeek never refuses anything, and evaluateGuardrails blocking only matters in replan/applyChange. Q1's 'No' branch says the generator 'keeps 6 days and flags V1', which makes a blocking rule fire on every run. Repairs from negotiate (absorbSpanner gives km back from easy days, demoteQualityFrom turns quality into easy) know nothing about roles and can flatten a week or empty L \u2212 1. A blocking week-structure rule would then refuse the spanner repair the daily pass depends on. Adding two rule ids also changes applied_rules in the scenario and tools contract tests.",
+    "evidence": "src/domain/planner/scenarios.test.ts:69 asserts applied_rules equals a sorted set; src/mcp/tools.test.ts:382-388; daily-pass.ts:495-504 writes result.resulting_window.",
+    "fix": "Make week-structure advisory in evaluateGuardrails. Enforce it as a generator self-test (placement.test over every macro week) rather than as a refusing guardrail. Specify how repairs keep roles (the give-back order skips recovery and L \u2212 1). List the contract tests that must be updated in stage 2."
+   },
+   {
+    "severity": "major",
+    "issue": "Numbers the design leaves undecided or defines twice, which breaks REDLINES rule 1 and the single-source rule. The taper long run is '0.4 x peak' in describeWeek (0.4 x 33 = 13.2, over the 13 km run-in ceiling) and also a config literal of 13 in stage 8. The library says taper long runs are '60 % then 40 %', but week 5's long session is the 16 km 10K. Threshold dosed 'by minutes' needs a pace to become km, yet prescribe.ts already hardcodes `205` s/km and repMin 4/5/6. Threshold km would then change whenever PACE_ANCHOR re-anchors. The design lists `sessions.prescription` jsonb as persisted while describeWeek re-derives the description at read time, giving two sources. None of these are named in the stage-1 consts: strides days per week and their tie-break, session-RPE per zone for the monotony diagnostic, or medium-long bands.",
+    "evidence": "src/domain/planner/prescribe.ts:140-147 (`205`, repMin literals); design section 5 persists prescription jsonb, but no stage adds it.",
+    "fix": "One source per number. The macro long-run km lives in config and describeWeek never recomputes it. Put the threshold minutes-by-phase table and rep structure in PRESCRIPTION, and pass derived paces in (or keep km as the stored dose) with a note on re-anchoring. Drop `prescription` jsonb, or add it to a stage and remove the read-time derivation. Extend the rule-4 'every number in config' check to the new consts."
+   },
+   {
+    "severity": "major",
+    "issue": "The strides rule contradicts the race-week sessions. The strides add-on is 'never the day before quality, a long run or a race', but the shakeout role on the goal race eve carries 4-6 x 80-100 m strides. Stage 6's test 'never the day before quality/long/race' would fail on the design's own shakeout, or the shakeout's strides are silently dropped. The existing config strides are 6 x 20 s, while the shakeout uses metres, a second unit.",
+    "evidence": "Design section 1, `strides` placement vs `shakeout` dose; PRESCRIPTION.strides {count 6, seconds 20}.",
+    "fix": "Model shakeout strides as part of that role's dose and exclude them from the add-on rule explicitly in config. Test both cases."
+   },
+   {
+    "severity": "major",
+    "issue": "The weekly structure logic is defined for one hard anchor per week, and the actual weeks have more. L + 1 = rest (V4) and L \u2212 1 = recovery assume a single L. Week 1 of this block, week 5 (Lincoln the previous Sunday, 10K on Sunday) and race week all carry several anchors, and minRestOrSwimOnlyDaysPerWeek is 1. Overflow ladder step 4 removes rest days 'in reverse preference', which can remove a Q + 1 rest while V4 is blocking. How the Pfitzinger run-day tiers fit together is unclear: every week in this block has minRunDays at or above the tier, so the tier table is dead data here. The 80 km weeks at 5 days only pass high-volume-spread because that check is `>` 80.",
+    "evidence": "src/domain/planner/guardrails.ts:218 `weekKm > highVolumeThresholdKm`; BLOCK_WEEKS minRunDays 6/6/7/6/5/3.",
+    "fix": "Define V3 and V4 per anchor, in anchor priority order, with 'as many as the rest budget allows'. State that the tiers only lower rest when minRunDays is below them, or delete the tiers until they bind. Add a stage 3 test for a week with two races."
+   },
+   {
+    "severity": "minor",
+    "issue": "Some stage tests would pass before any code change or do not isolate what they claim. 'does not treat a km monotony of 2.15 as a breach' passes against the current code, because nothing computes monotony, so it has no failing first run. 'week of 14 Sep ... note names Sun 20' is unclear: Sun 20 is L + 1 rest, and the design says week 2 has no quality session. Stage 1's field-claim test cannot just be extended, because GUARDRAIL_RULE_IDS `satisfies ... keyof GUARDRAILS | keyof READINESS`, and training.test.ts:509-511 fails any field from another object. Stage 7 cites an invariant sweep script that exists in routr, not rocket.",
+    "evidence": "config/training.ts:326-372 `satisfies` clause; config/training.test.ts:494-511.",
+    "fix": "Delete the monotony test or turn it into a check that the diagnostic is emitted and gates nothing. Spell out the week 2 note text. In stage 1, widen the satisfies type and the test's field universe explicitly. Replace the stage 7 sweep reference with a manual delete-and-rerun step."
+   },
+   {
+    "severity": "minor",
+    "issue": "Factual errors about the current code. diffWindows is not keyed by a date Map: it filters all sessions on each date and sums km, so doubles are merged but not lost. toPlanned maps row by row, not by date. The only real loss is replaceWindow. Stage 6 says legs goes on 'Wed 7 Oct', two days before... in fact the 10K is Sun 11. The design itself notes a 14 km day on Fri 9. It does not check STRENGTH.gymFreeDaysBeforeRace or say whether heavy legs 4 days before a raced 10K is intended.",
+    "evidence": "src/domain/planner/negotiate.ts:588-633; src/lib/plan.ts:76-84; prescribe.ts:281-290.",
+    "fix": "Correct the defect description in the task header. Stage 5 still switches diff changes to date|slot so a slot move inside a double shows up. Add a legs-before-tune-up rule to STRENGTH, or state explicitly that it was considered and accepted."
+   }
+  ]
+ }
+]
